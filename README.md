@@ -58,7 +58,24 @@ npm run dev
 
 Halaman referensi komponen desain sistem (design system): http://localhost:5173/_style-guide
 
+**Catatan port PostgreSQL (Opsi B/lokal Windows):** kalau di mesin Anda sudah ada instance
+PostgreSQL lain yang memakai port 5432 default, install instance terpisah untuk proyek ini di
+port lain (mis. 5434) dan sesuaikan `DB_PORT` di `.env` — jangan menimpa/memakai database milik
+proyek lain. Buat role & database secara manual sekali:
+
+```sh
+psql -U postgres -h 127.0.0.1 -p <port> -c "CREATE ROLE myameta WITH LOGIN PASSWORD 'secret';"
+psql -U postgres -h 127.0.0.1 -p <port> -c "CREATE DATABASE myameta_survey OWNER myameta;"
+```
+
 ## Status
 
-Fase 0 (setup + design system) — lihat rencana lengkap di
-`docs/16_PLAN_FULLSTACK_LARAVEL_MYAMETA_SURVEY.md`.
+Fase 0 (setup + design system) dan Fase 1 (SSO Portal, RBAC, sinkronisasi data mahasiswa/pegawai)
+— lihat rencana lengkap di `docs/16_PLAN_FULLSTACK_LARAVEL_MYAMETA_SURVEY.md`.
+
+Fase 1 sudah diverifikasi end-to-end secara lokal (PostgreSQL + Redis sungguhan, queue worker
+nyata, dan Portal SSO tiruan yang mengikuti kontrak `docs/15`): login → JIT provisioning user →
+RBAC menegakkan akses per role → sinkronisasi data mahasiswa berjalan async lewat queue. Portal
+SSO sungguhan (`SSO_PORTAL_BASE_URL`, `SSO_APP_CLIENT_ID`, `SSO_APP_TOKEN` di `.env`) belum
+dikonfigurasi — nilai kunci HKDF di `SsoCryptoService` juga masih perlu diverifikasi byte-for-byte
+terhadap implementasi Portal sungguhan sebelum go-live (lihat komentar di file tsb).

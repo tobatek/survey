@@ -66,12 +66,12 @@ export const useAuthStore = defineStore('auth', {
      * ini navigasi halaman, sehingga memakai VITE_API_ORIGIN, bukan proxy /api.
      */
     redirectToLogin() {
-      const apiOrigin = import.meta.env.VITE_API_ORIGIN ?? 'http://localhost:8000'
+      const apiOrigin = import.meta.env.VITE_API_ORIGIN ?? 'http://127.0.0.1:8000'
       window.location.href = `${apiOrigin}/auth/redirect`
     },
 
     async logout(): Promise<void> {
-      const apiOrigin = import.meta.env.VITE_API_ORIGIN ?? 'http://localhost:8000'
+      const apiOrigin = import.meta.env.VITE_API_ORIGIN ?? 'http://127.0.0.1:8000'
 
       // /logout adalah rute web Laravel (bukan /api/*), jadi tidak lewat
       // apiFetch (yang selalu prefix ke API_BASE relatif) — panggil origin
