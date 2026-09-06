@@ -1,0 +1,9 @@
+# Root-level ignores. Laravel (apps/api) dan SPA (apps/web) punya
+# .gitignore masing-masing untuk aturan spesifik mereka.
+
+.DS_Store
+Thumbs.db
+*.log
+
+# Tooling lokal Claude Code (permission settings mesin ini, bukan bagian kode)
+.claude/settings.local.json
