@@ -5,6 +5,7 @@
 // menempel di kiri mulai `lg` — pola ini terinspirasi sidebar filter
 // collapsible karirlink.id, diadaptasi jadi sidebar navigasi.
 import { ref } from 'vue'
+import { useAuthStore } from '@/features/auth/store/auth'
 
 export interface NavItem {
   label: string
@@ -19,6 +20,7 @@ defineProps<{
 }>()
 
 const sidebarOpen = ref(false)
+const auth = useAuthStore()
 </script>
 
 <template>
@@ -70,8 +72,16 @@ const sidebarOpen = ref(false)
           <div class="hidden text-sm text-slate-500 sm:block">{{ institutionName ?? 'STIKES Advaita Medika' }}</div>
         </div>
         <div class="flex items-center gap-3">
-          <span v-if="activeRoleLabel" class="hidden text-xs text-slate-500 sm:inline">{{ activeRoleLabel }}</span>
+          <span v-if="auth.user" class="hidden text-xs text-slate-500 sm:inline">{{ auth.user.name }}</span>
+          <span v-else-if="activeRoleLabel" class="hidden text-xs text-slate-500 sm:inline">{{ activeRoleLabel }}</span>
           <slot name="topbar-actions" />
+          <button
+            type="button"
+            class="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+            @click="auth.logout()"
+          >
+            Keluar
+          </button>
         </div>
       </header>
 

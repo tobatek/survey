@@ -4,46 +4,32 @@ use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
+// Skema identity mengikuti FSD §16.1. Tidak ada login lokal (email/password) —
+// satu-satunya jalur masuk adalah SSO Portal (docs/15), sehingga tidak ada
+// kolom password/remember_token maupun tabel password_reset_tokens.
+// Session disimpan di Redis (SESSION_DRIVER=redis), bukan tabel `sessions`.
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::create('users', function (Blueprint $table) {
-            $table->id();
-            $table->string('name');
-            $table->string('email')->unique();
-            $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
+            $table->uuid('id')->primary();
+            $table->string('tenant_id')->default('default');
+            $table->string('hub_user_id')->nullable();
+            $table->string('email');
+            $table->string('display_name');
+            $table->string('status')->default('active');
+            $table->timestamp('last_login_at')->nullable();
+            $table->timestamp('last_synced_at')->nullable();
             $table->timestamps();
-        });
 
-        Schema::create('password_reset_tokens', function (Blueprint $table) {
-            $table->string('email')->primary();
-            $table->string('token');
-            $table->timestamp('created_at')->nullable();
-        });
-
-        Schema::create('sessions', function (Blueprint $table) {
-            $table->string('id')->primary();
-            $table->foreignId('user_id')->nullable()->index();
-            $table->string('ip_address', 45)->nullable();
-            $table->text('user_agent')->nullable();
-            $table->longText('payload');
-            $table->integer('last_activity')->index();
+            $table->unique(['tenant_id', 'hub_user_id']);
+            $table->index(['tenant_id', 'email']);
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::dropIfExists('users');
-        Schema::dropIfExists('password_reset_tokens');
-        Schema::dropIfExists('sessions');
     }
 };

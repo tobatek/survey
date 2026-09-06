@@ -2,17 +2,15 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+// Backend ini API-only (SPA terpisah di apps/web) — tidak ada halaman `/`,
+// jadi test bawaan Laravel diganti memeriksa liveness bawaan framework.
 class ExampleTest extends TestCase
 {
-    /**
-     * A basic test example.
-     */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_the_liveness_endpoint_is_reachable(): void
     {
-        $response = $this->get('/');
+        $response = $this->get('/up');
 
         $response->assertStatus(200);
     }

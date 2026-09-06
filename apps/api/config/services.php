@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    // Tempat browser diarahkan balik setelah SsoController@callback/@logout.
+    'spa' => [
+        'url' => env('SPA_URL', 'http://localhost:5173'),
+    ],
+
 ];

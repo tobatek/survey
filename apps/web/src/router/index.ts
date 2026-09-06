@@ -1,8 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/features/auth/store/auth'
 
-// Guard router: admin vs responden vs unauthenticated (FSD §6). Auth store
-// masih stub Fase 0 — pengecekan sesi nyata via GET /api/me dibangun di Fase 1.
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -60,18 +58,32 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
-  // Fase 0: guard belum menegakkan redirect nyata (auth store selalu kosong),
-  // hanya menyiapkan kerangka meta.requiresAdmin/requiresRespondent/guest
-  // supaya Fase 1 tinggal mengisi pengecekan session.
+// Sesi disimpan sebagai cookie Sanctum di apps/api — satu-satunya cara SPA
+// tahu status login adalah bertanya via GET /api/me (fetchMe), sekali per
+// page load, sebelum navigasi pertama diselesaikan.
+router.beforeEach(async (to) => {
+  if (to.name === 'style-guide') return true
+
   const auth = useAuthStore()
 
-  if (to.meta.requiresAdmin && !auth.isAuthenticated) {
-    return { name: 'login' }
+  if (!auth.initialized) {
+    await auth.fetchMe()
   }
 
-  if (to.meta.requiresRespondent && !auth.isAuthenticated) {
-    return { name: 'login' }
+  if (to.meta.guest) {
+    return true
+  }
+
+  if (to.meta.requiresAdmin) {
+    if (!auth.isAuthenticated) return { name: 'login' }
+    if (!auth.isAdmin) return { name: 'my-surveys' }
+    return true
+  }
+
+  if (to.meta.requiresRespondent) {
+    if (!auth.isAuthenticated) return { name: 'login' }
+    if (!auth.isRespondent) return { name: 'questionnaires' }
+    return true
   }
 
   return true
