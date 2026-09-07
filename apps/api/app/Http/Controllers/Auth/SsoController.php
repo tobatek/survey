@@ -7,6 +7,7 @@ use App\Domains\Identity\Actions\FindOrCreateUserFromSsoIdentityAction;
 use App\Domains\Identity\Support\PortalSsoClient;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -78,6 +79,34 @@ class SsoController extends Controller
 
             return $this->redirectToSpaWithError($correlationId);
         }
+    }
+
+    // Dev-only: bypass Portal SSO, login langsung sebagai user existing.
+    // Rute pemanggilnya (routes/web.php) hanya terdaftar saat app()->environment('local'),
+    // tapi guard di-cek ulang di sini sebagai lapisan kedua.
+    public function devLogin(Request $request, RecordAuditEventAction $recordAuditEvent): RedirectResponse
+    {
+        abort_unless(app()->environment('local'), 404);
+
+        $email = $request->query('email', 'admin@myameta-survey.test');
+
+        $user = User::query()->where('email', $email)->first();
+
+        if ($user === null) {
+            abort(404, "User dev-login dengan email {$email} tidak ditemukan. Jalankan `php artisan db:seed`.");
+        }
+
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        $recordAuditEvent->execute(
+            action: 'login_succeeded',
+            result: 'success',
+            actor: $user,
+            correlationId: (string) Str::uuid(),
+        );
+
+        return redirect()->away(config('services.spa.url'));
     }
 
     public function logout(Request $request, RecordAuditEventAction $recordAuditEvent): RedirectResponse

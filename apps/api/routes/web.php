@@ -10,3 +10,10 @@ use Illuminate\Support\Facades\Route;
 Route::get('/auth/redirect', [SsoController::class, 'redirect'])->name('auth.redirect');
 Route::get('/auth/callback', [SsoController::class, 'callback'])->name('auth.callback');
 Route::post('/logout', [SsoController::class, 'logout'])->name('auth.logout');
+
+// Bypass Portal SSO untuk dev lokal saja — TIDAK pernah terdaftar di
+// environment selain local. Login langsung sebagai user existing lewat
+// ?email=, default ke admin seed lokal (lihat DatabaseSeeder).
+if (app()->environment('local')) {
+    Route::get('/auth/dev-login', [SsoController::class, 'devLogin'])->name('auth.dev-login');
+}
