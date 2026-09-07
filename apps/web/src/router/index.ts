@@ -21,6 +21,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/questionnaires/:id/builder',
+      name: 'questionnaires.builder',
+      component: () => import('@/features/questionnaires/QuestionnaireBuilderPage.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/students',
       name: 'students',
       component: () => import('@/features/students/StudentListPage.vue'),

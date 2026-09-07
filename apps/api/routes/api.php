@@ -2,6 +2,11 @@
 
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\Api\MatrixRowController;
+use App\Http\Controllers\Api\QuestionController;
+use App\Http\Controllers\Api\QuestionnaireController;
+use App\Http\Controllers\Api\QuestionnaireSectionController;
+use App\Http\Controllers\Api\QuestionOptionController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\SyncRunController;
 use App\Http\Controllers\Auth\SsoController;
@@ -29,5 +34,39 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware('role:lpm_admin,technical_admin')->group(function () {
         Route::post('/students/sync', [StudentController::class, 'sync']);
         Route::post('/employees/sync', [EmployeeController::class, 'sync']);
+    });
+
+    // Kuesioner builder (Fase 2, FSD §17.3) — lihat/list boleh executive_viewer
+    // (agregat), tapi mutasi builder hanya LPM Admin & Survey Operator
+    // (FSD §5.3). Semua mutasi wajib header If-Match (lock_version).
+    Route::middleware($adminViewerRoles)->group(function () {
+        Route::get('/questionnaires', [QuestionnaireController::class, 'index']);
+        Route::get('/questionnaires/{questionnaire}', [QuestionnaireController::class, 'show']);
+        Route::get('/questionnaires/{questionnaire}/validate', [QuestionnaireController::class, 'validateStructure']);
+    });
+
+    Route::middleware('role:lpm_admin,survey_operator')->group(function () {
+        Route::post('/questionnaires', [QuestionnaireController::class, 'store']);
+        Route::patch('/questionnaires/{questionnaire}', [QuestionnaireController::class, 'update']);
+        Route::delete('/questionnaires/{questionnaire}', [QuestionnaireController::class, 'destroy']);
+        Route::post('/questionnaires/{questionnaire}/duplicate', [QuestionnaireController::class, 'duplicate']);
+        Route::post('/questionnaires/{questionnaire}/finalize', [QuestionnaireController::class, 'finalize']);
+        Route::post('/questionnaires/{questionnaire}/transition', [QuestionnaireController::class, 'transition']);
+
+        Route::post('/questionnaires/{questionnaire}/sections', [QuestionnaireSectionController::class, 'store']);
+        Route::patch('/sections/{section}', [QuestionnaireSectionController::class, 'update']);
+        Route::delete('/sections/{section}', [QuestionnaireSectionController::class, 'destroy']);
+
+        Route::post('/sections/{section}/questions', [QuestionController::class, 'store']);
+        Route::patch('/questions/{question}', [QuestionController::class, 'update']);
+        Route::delete('/questions/{question}', [QuestionController::class, 'destroy']);
+
+        Route::post('/questions/{question}/options', [QuestionOptionController::class, 'store']);
+        Route::patch('/options/{option}', [QuestionOptionController::class, 'update']);
+        Route::delete('/options/{option}', [QuestionOptionController::class, 'destroy']);
+
+        Route::post('/questions/{question}/matrix-rows', [MatrixRowController::class, 'store']);
+        Route::patch('/matrix-rows/{matrixRow}', [MatrixRowController::class, 'update']);
+        Route::delete('/matrix-rows/{matrixRow}', [MatrixRowController::class, 'destroy']);
     });
 });
