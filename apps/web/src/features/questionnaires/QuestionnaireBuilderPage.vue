@@ -1,14 +1,16 @@
 <script setup lang="ts">
 // Builder dasar Fase 2 (slice pertama — lihat plan): CRUD section/pertanyaan
-// semua 9 tipe MVP, opsi & baris matrix, validasi, finalisasi. BELUM termasuk:
-// drag-drop reorder (pakai tombol naik/turun), preview mode, branch simulator
-// — lihat backlog di plan file.
+// semua 9 tipe MVP, opsi & baris matrix, validasi, finalisasi, preview mode
+// (desktop/mobile + branch simulator, slice 4). BELUM termasuk: drag-drop
+// reorder (pakai tombol naik/turun) — lihat backlog di plan file.
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '@/features/shared/components/AppShell.vue'
 import StatusBadge from '@/features/shared/components/StatusBadge.vue'
 import { useToast } from '@/features/shared/useToast'
 import { NAV_ITEMS } from '@/router/nav'
+import { QUESTION_TYPE_LABELS } from './constants'
+import QuestionnairePreviewModal from './components/QuestionnairePreviewModal.vue'
 import {
   useQuestionnaireBuilderStore,
   questionNeedsOptions,
@@ -17,23 +19,12 @@ import {
 } from './store/builder'
 import { ApiError } from '@/lib/api'
 
-const QUESTION_TYPE_LABELS: Record<QuestionType, string> = {
-  short_text: 'Teks Singkat',
-  long_text: 'Teks Panjang',
-  single_choice: 'Pilihan Tunggal',
-  multiple_choice: 'Pilihan Ganda',
-  dropdown: 'Dropdown',
-  likert: 'Skala Likert',
-  matrix: 'Matrix',
-  number: 'Angka',
-  date: 'Tanggal',
-}
-
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const store = useQuestionnaireBuilderStore()
 
+const showPreview = ref(false)
 const selectedSectionId = ref<string | null>(null)
 const newSectionTitle = ref('')
 const newQuestion = reactive({ code: '', type: 'short_text' as QuestionType, text: '' })
@@ -190,6 +181,9 @@ onMounted(loadQuestionnaire)
         </div>
 
         <div class="flex gap-2">
+          <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50" @click="showPreview = true">
+            Preview
+          </button>
           <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50" @click="runValidate">
             Validasi
           </button>
@@ -332,6 +326,8 @@ onMounted(loadQuestionnaire)
           </div>
         </div>
       </div>
+
+      <QuestionnairePreviewModal v-if="showPreview" :questionnaire="store.questionnaire" @close="showPreview = false" />
     </template>
   </AppShell>
 </template>
