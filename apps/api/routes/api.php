@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\QuestionnaireSectionController;
 use App\Http\Controllers\Api\QuestionOptionController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\SyncRunController;
+use App\Http\Controllers\Api\TemplateImportController;
 use App\Http\Controllers\Auth\SsoController;
 use Illuminate\Support\Facades\Route;
 
@@ -68,5 +69,17 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/questions/{question}/matrix-rows', [MatrixRowController::class, 'store']);
         Route::patch('/matrix-rows/{matrixRow}', [MatrixRowController::class, 'update']);
         Route::delete('/matrix-rows/{matrixRow}', [MatrixRowController::class, 'destroy']);
+    });
+
+    // Import Template Kuesioner (FSD §15, slice JSON) — lihat histori boleh
+    // adminViewerRoles, upload & commit hanya LPM Admin & Survey Operator.
+    Route::middleware($adminViewerRoles)->group(function () {
+        Route::get('/settings/template-imports', [TemplateImportController::class, 'index']);
+        Route::get('/settings/template-imports/{templateImport}', [TemplateImportController::class, 'show']);
+    });
+
+    Route::middleware('role:lpm_admin,survey_operator')->group(function () {
+        Route::post('/settings/template-imports', [TemplateImportController::class, 'store']);
+        Route::post('/settings/template-imports/{templateImport}/commit', [TemplateImportController::class, 'commit']);
     });
 });
