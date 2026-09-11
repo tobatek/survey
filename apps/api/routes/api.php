@@ -71,6 +71,9 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/questions/{question}/matrix-rows', [MatrixRowController::class, 'store']);
         Route::patch('/matrix-rows/{matrixRow}', [MatrixRowController::class, 'update']);
         Route::delete('/matrix-rows/{matrixRow}', [MatrixRowController::class, 'destroy']);
+
+        // Aktifkan/nonaktifkan template (FSD §17.7).
+        Route::patch('/templates/{template}/status', [SurveyTemplateController::class, 'updateStatus']);
     });
 
     // Import Template Kuesioner (FSD §15, slice JSON) — lihat histori boleh

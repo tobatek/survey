@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // Wizard Import Template Kuesioner (Fase 2 slice 2, FSD §15 — slice JSON):
 // 1) pilih file .json -> 2) pratinjau error/warning per path -> 3) konfirmasi
-// & commit. XLSX, sample.json, dan aktif/nonaktif template dicatat sebagai
-// backlog slice berikutnya.
+// & commit. Daftar template + aktif/nonaktif (FSD §17.7) di slice 7.
+// XLSX dan sample.json dicatat sebagai backlog slice berikutnya.
 import { computed, onMounted, ref } from 'vue'
 import AppShell from '@/features/shared/components/AppShell.vue'
 import Card from '@/features/shared/components/Card.vue'
@@ -11,8 +11,10 @@ import { useToast } from '@/features/shared/useToast'
 import { ApiError } from '@/lib/api'
 import { NAV_ITEMS } from '@/router/nav'
 import { useTemplateImportStore } from './store/templateImport'
+import { useTemplatesStore, type TemplateRow } from './store/templates'
 
 const store = useTemplateImportStore()
+const templatesStore = useTemplatesStore()
 const toast = useToast()
 const fileInput = ref<HTMLInputElement | null>(null)
 const selectedFilename = ref<string | null>(null)
@@ -56,7 +58,19 @@ function statusLabel(status: string): string {
   return { pending_validation: 'Menunggu', validated: 'Valid', failed: 'Ada Error', committed: 'Terkonfirmasi' }[status] ?? status
 }
 
-onMounted(() => store.loadHistory())
+async function toggleTemplateStatus(template: TemplateRow) {
+  try {
+    await templatesStore.toggleStatus(template)
+    toast.push(`Template '${template.code}' berhasil di${template.status === 'active' ? 'nonaktifkan' : 'aktifkan'}.`, 'success')
+  } catch (error) {
+    toast.push(error instanceof ApiError ? error.message : 'Gagal mengubah status template.', 'error')
+  }
+}
+
+onMounted(() => {
+  store.loadHistory()
+  templatesStore.loadAll()
+})
 </script>
 
 <template>
@@ -178,6 +192,56 @@ onMounted(() => store.loadHistory())
               <td class="px-3 py-2">{{ row.preview.template_code ?? '-' }}</td>
               <td class="px-3 py-2 text-xs text-slate-400">{{ row.created_at }}</td>
               <td class="px-3 py-2 text-xs text-slate-400">{{ row.uploaded_by ?? '-' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="mt-8">
+      <h2 class="text-sm font-semibold text-slate-900">Template Terdaftar</h2>
+
+      <EmptyState
+        v-if="!templatesStore.loading && templatesStore.list.length === 0"
+        title="Belum ada template"
+        description="Template muncul di sini setelah import berhasil dikonfirmasi."
+        class="mt-3"
+      />
+
+      <div v-else class="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-50 text-xs text-slate-500">
+            <tr>
+              <th class="px-3 py-2">Kode</th>
+              <th class="px-3 py-2">Judul</th>
+              <th class="px-3 py-2">Kategori</th>
+              <th class="px-3 py-2">Status</th>
+              <th class="px-3 py-2"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr v-for="template in templatesStore.list" :key="template.id">
+              <td class="px-3 py-2 font-mono text-xs">{{ template.code }}</td>
+              <td class="px-3 py-2">{{ template.title }}</td>
+              <td class="px-3 py-2 text-xs text-slate-500">{{ template.category ?? '-' }}</td>
+              <td class="px-3 py-2">
+                <span
+                  class="rounded-full px-2 py-0.5 text-xs font-medium"
+                  :class="template.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'"
+                >
+                  {{ template.status === 'active' ? 'Aktif' : 'Nonaktif' }}
+                </span>
+              </td>
+              <td class="px-3 py-2 text-right">
+                <button
+                  type="button"
+                  class="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  :disabled="templatesStore.updatingId === template.id"
+                  @click="toggleTemplateStatus(template)"
+                >
+                  {{ template.status === 'active' ? 'Nonaktifkan' : 'Aktifkan' }}
+                </button>
+              </td>
             </tr>
           </tbody>
         </table>
