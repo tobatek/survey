@@ -76,6 +76,51 @@ async function moveSection(section: SectionNode, direction: -1 | 1) {
   }, 'Gagal mengubah urutan section.')
 }
 
+// Drag-and-drop reorder (pelengkap tombol naik/turun — tombol tetap ada
+// sebagai fallback yang reliable di mobile/touch dan aksesibilitas keyboard,
+// drag-drop native HTML cuma nyaman dipakai dengan mouse di desktop).
+const draggedSectionId = ref<string | null>(null)
+const dragOverSectionId = ref<string | null>(null)
+
+function onSectionDragStart(sectionId: string) {
+  draggedSectionId.value = sectionId
+}
+
+function onSectionDragEnd() {
+  draggedSectionId.value = null
+  dragOverSectionId.value = null
+}
+
+function onSectionDragOver(sectionId: string) {
+  dragOverSectionId.value = sectionId
+}
+
+async function onSectionDrop(targetSection: SectionNode) {
+  const draggedId = draggedSectionId.value
+  draggedSectionId.value = null
+  dragOverSectionId.value = null
+  if (!store.questionnaire || !draggedId || draggedId === targetSection.id) return
+
+  const sections = [...store.questionnaire.sections].sort((a, b) => a.sort_order - b.sort_order)
+  const draggedIndex = sections.findIndex((s) => s.id === draggedId)
+  const targetIndex = sections.findIndex((s) => s.id === targetSection.id)
+  if (draggedIndex === -1 || targetIndex === -1) return
+
+  const reordered = [...sections]
+  const [dragged] = reordered.splice(draggedIndex, 1)
+  reordered.splice(targetIndex, 0, dragged)
+
+  const changes = reordered
+    .map((section, index) => ({ section, index }))
+    .filter(({ section, index }) => section.sort_order !== index)
+
+  await reportError(async () => {
+    for (const { section, index } of changes) {
+      await store.updateSection(section.id, { sort_order: index })
+    }
+  }, 'Gagal mengubah urutan section.')
+}
+
 async function addQuestion() {
   if (!selectedSectionId.value || !newQuestion.code.trim() || !newQuestion.text.trim()) return
   await reportError(
@@ -222,9 +267,19 @@ onMounted(loadQuestionnaire)
             <div
               v-for="section in [...store.questionnaire.sections].sort((a, b) => a.sort_order - b.sort_order)"
               :key="section.id"
-              class="flex items-center gap-1 rounded-lg px-2 py-1.5"
-              :class="selectedSectionId === section.id ? 'bg-brand-50' : 'hover:bg-slate-50'"
+              :draggable="store.isEditable"
+              class="flex items-center gap-1 rounded-lg px-2 py-1.5 border-t-2"
+              :class="[
+                selectedSectionId === section.id ? 'bg-brand-50' : 'hover:bg-slate-50',
+                draggedSectionId === section.id ? 'opacity-40' : '',
+                dragOverSectionId === section.id && draggedSectionId !== section.id ? 'border-brand-500' : 'border-transparent',
+              ]"
+              @dragstart="onSectionDragStart(section.id)"
+              @dragend="onSectionDragEnd"
+              @dragover.prevent="onSectionDragOver(section.id)"
+              @drop.prevent="onSectionDrop(section)"
             >
+              <span v-if="store.isEditable" class="cursor-grab select-none text-slate-300 hover:text-slate-500" title="Seret untuk urutkan">&#8942;&#8942;</span>
               <button type="button" class="min-w-0 flex-1 truncate text-left text-sm" :class="selectedSectionId === section.id ? 'font-medium text-brand-700' : 'text-slate-600'" @click="selectedSectionId = section.id">
                 {{ section.title }}
               </button>
