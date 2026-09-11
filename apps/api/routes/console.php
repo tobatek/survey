@@ -15,3 +15,7 @@ Artisan::command('inspire', function () {
 // itu sendiri (App\Jobs\SyncStudentsJob/SyncEmployeesJob).
 Schedule::job(new SyncStudentsJob('scheduled'))->dailyAt('02:00')->withoutOverlapping();
 Schedule::job(new SyncEmployeesJob('scheduled'))->dailyAt('02:15')->withoutOverlapping();
+
+// FSD §15.4 — staging template_imports expired (TTL 1 jam, lihat
+// ValidateTemplateImportAction) dibersihkan tiap jam.
+Schedule::command('template-imports:prune-expired')->hourly()->withoutOverlapping();
