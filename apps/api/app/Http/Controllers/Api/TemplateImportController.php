@@ -51,6 +51,62 @@ class TemplateImportController extends Controller
         return (new TemplateImportResource($import))->response()->setStatusCode(201);
     }
 
+    // Contoh file JSON valid (FSD §17.7 "GET .../sample.xlsx" — versi JSON
+    // untuk slice ini) supaya admin tidak coba-coba upload file sembarangan
+    // (mis. kejadian upload airports.json yang jelas bukan skema template).
+    public function sample(): JsonResponse
+    {
+        Gate::authorize('viewAny', TemplateImport::class);
+
+        $sample = [
+            'schema_version' => '1.0',
+            'template' => [
+                'code' => 'CONTOH-001',
+                'title' => 'Contoh Survei Kepuasan Mahasiswa',
+                'description' => 'Ganti seluruh isi file ini sebelum diimpor sungguhan.',
+                'category' => 'layanan_mahasiswa',
+                'audience_type' => 'student',
+                'identity_mode' => 'verified_anonymous',
+                'language' => 'id',
+            ],
+            'sections' => [
+                [
+                    'code' => 'S1',
+                    'title' => 'Data Diri',
+                    'questions' => [
+                        [
+                            'code' => 'Q1',
+                            'text' => 'Siapa nama lengkap Anda?',
+                            'type' => 'short_text',
+                            'required' => true,
+                        ],
+                    ],
+                ],
+                [
+                    'code' => 'S2',
+                    'title' => 'Kepuasan Layanan',
+                    'questions' => [
+                        [
+                            'code' => 'Q2',
+                            'text' => 'Seberapa puas Anda dengan layanan akademik?',
+                            'type' => 'single_choice',
+                            'required' => true,
+                            'options' => [
+                                ['code' => 'O1', 'label' => 'Sangat Puas', 'numeric_score' => 4],
+                                ['code' => 'O2', 'label' => 'Puas', 'numeric_score' => 3],
+                                ['code' => 'O3', 'label' => 'Tidak Puas', 'numeric_score' => 1],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        return response()->json($sample, 200, [
+            'Content-Disposition' => 'attachment; filename="template-sample.json"',
+        ]);
+    }
+
     public function show(TemplateImport $templateImport): TemplateImportResource
     {
         Gate::authorize('view', $templateImport);

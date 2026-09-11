@@ -8,7 +8,7 @@ import AppShell from '@/features/shared/components/AppShell.vue'
 import Card from '@/features/shared/components/Card.vue'
 import EmptyState from '@/features/shared/components/EmptyState.vue'
 import { useToast } from '@/features/shared/useToast'
-import { ApiError } from '@/lib/api'
+import { API_BASE, ApiError } from '@/lib/api'
 import { NAV_ITEMS } from '@/router/nav'
 import { useTemplateImportStore } from './store/templateImport'
 import { useTemplatesStore, type TemplateRow } from './store/templates'
@@ -80,7 +80,15 @@ onMounted(() => {
 
     <Card class="mt-6">
       <template #header>
-        <h2 class="text-sm font-semibold text-slate-900">1. Unggah File</h2>
+        <div class="flex items-center justify-between">
+          <h2 class="text-sm font-semibold text-slate-900">1. Unggah File</h2>
+          <a
+            :href="`${API_BASE}/settings/template-imports/sample.json`"
+            class="text-xs font-medium text-brand-600 hover:underline"
+          >
+            Unduh Contoh (sample.json)
+          </a>
+        </div>
       </template>
       <template #body>
         <div class="flex items-center gap-3">

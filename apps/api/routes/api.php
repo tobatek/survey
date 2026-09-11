@@ -80,7 +80,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // adminViewerRoles, upload & commit hanya LPM Admin & Survey Operator.
     Route::middleware($adminViewerRoles)->group(function () {
         Route::get('/settings/template-imports', [TemplateImportController::class, 'index']);
-        Route::get('/settings/template-imports/{templateImport}', [TemplateImportController::class, 'show']);
+        Route::get('/settings/template-imports/sample.json', [TemplateImportController::class, 'sample']);
+        Route::get('/settings/template-imports/{templateImport}', [TemplateImportController::class, 'show'])->whereUuid('templateImport');
     });
 
     Route::middleware('role:lpm_admin,survey_operator')->group(function () {

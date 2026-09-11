@@ -83,6 +83,18 @@ class TemplateImportTest extends TestCase
     }
 
     #[Test]
+    public function sample_json_is_downloadable_and_importable_as_is(): void
+    {
+        $sampleResponse = $this->actingAs($this->admin)->getJson('/api/settings/template-imports/sample.json');
+        $sampleResponse->assertOk();
+        $sampleResponse->assertHeader('Content-Disposition', 'attachment; filename="template-sample.json"');
+
+        $response = $this->postImport($sampleResponse->json());
+        $response->assertCreated();
+        $response->assertJsonPath('data.status', 'validated');
+    }
+
+    #[Test]
     public function valid_json_can_be_validated_then_committed(): void
     {
         $response = $this->postImport($this->validPayload());
