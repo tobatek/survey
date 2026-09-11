@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\QuestionnaireController;
 use App\Http\Controllers\Api\QuestionnaireSectionController;
 use App\Http\Controllers\Api\QuestionOptionController;
 use App\Http\Controllers\Api\StudentController;
+use App\Http\Controllers\Api\SurveyTemplateController;
 use App\Http\Controllers\Api\SyncRunController;
 use App\Http\Controllers\Api\TemplateImportController;
 use App\Http\Controllers\Auth\SsoController;
@@ -44,6 +45,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/questionnaires', [QuestionnaireController::class, 'index']);
         Route::get('/questionnaires/{questionnaire}', [QuestionnaireController::class, 'show']);
         Route::get('/questionnaires/{questionnaire}/validate', [QuestionnaireController::class, 'validateStructure']);
+        Route::get('/templates', [SurveyTemplateController::class, 'index']);
     });
 
     Route::middleware('role:lpm_admin,survey_operator')->group(function () {

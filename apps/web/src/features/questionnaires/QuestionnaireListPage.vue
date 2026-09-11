@@ -23,6 +23,15 @@ interface QuestionnaireRow {
   updated_at: string | null
 }
 
+interface TemplateOption {
+  id: string
+  code: string
+  title: string
+  category: string | null
+  audience_type: string
+  identity_mode: string
+}
+
 interface PaginatedResponse<T> {
   data: T[]
   meta: { current_page: number; per_page: number; total: number }
@@ -52,12 +61,38 @@ const filters = reactive({ search: '', category: '' })
 const showCreateForm = ref(false)
 const creating = ref(false)
 const createError = ref<string | null>(null)
+const createSource = ref<'blank' | 'template'>('blank')
+const templates = ref<TemplateOption[]>([])
+const selectedTemplateId = ref('')
 const newQuestionnaire = reactive({
   code: '',
   title: '',
   audience_type: 'student',
   identity_mode: 'anonymous',
 })
+
+async function loadTemplates() {
+  try {
+    const response = await apiFetch<{ data: TemplateOption[] }>('/templates')
+    templates.value = response.data
+  } catch (error) {
+    toast.push('Gagal memuat daftar template.', 'error')
+  }
+}
+
+function onTemplateSelected() {
+  const template = templates.value.find((t) => t.id === selectedTemplateId.value)
+  if (!template) return
+  newQuestionnaire.audience_type = template.audience_type
+  newQuestionnaire.identity_mode = template.identity_mode
+}
+
+function openCreateForm() {
+  showCreateForm.value = true
+  createSource.value = 'blank'
+  selectedTemplateId.value = ''
+  loadTemplates()
+}
 
 async function loadQuestionnaires() {
   loading.value = true
@@ -97,9 +132,14 @@ async function submitCreate() {
   creating.value = true
   createError.value = null
   try {
+    const payload =
+      createSource.value === 'template' && selectedTemplateId.value
+        ? { code: newQuestionnaire.code, title: newQuestionnaire.title, template_id: selectedTemplateId.value }
+        : newQuestionnaire
+
     const response = await apiFetch<{ data: QuestionnaireRow }>('/questionnaires', {
       method: 'POST',
-      body: JSON.stringify(newQuestionnaire),
+      body: JSON.stringify(payload),
     })
     showCreateForm.value = false
     router.push({ name: 'questionnaires.builder', params: { id: response.data.id } })
@@ -120,7 +160,7 @@ onMounted(loadQuestionnaires)
       <button
         type="button"
         class="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700"
-        @click="showCreateForm = true"
+        @click="openCreateForm"
       >
         Buat Kuesioner
       </button>
@@ -229,7 +269,36 @@ onMounted(loadQuestionnaires)
               placeholder="mis. Survei Kepuasan Mahasiswa 2026"
             />
           </div>
-          <div class="grid grid-cols-2 gap-3">
+
+          <div>
+            <label class="text-xs font-medium text-slate-500">Mulai Dari</label>
+            <div class="mt-1 flex gap-4 text-sm text-slate-700">
+              <label class="flex items-center gap-1.5">
+                <input v-model="createSource" type="radio" value="blank" />
+                Kosong
+              </label>
+              <label class="flex items-center gap-1.5">
+                <input v-model="createSource" type="radio" value="template" />
+                Dari Template
+              </label>
+            </div>
+          </div>
+
+          <div v-if="createSource === 'template'">
+            <label class="text-xs font-medium text-slate-500">Template</label>
+            <select
+              v-model="selectedTemplateId"
+              required
+              class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              @change="onTemplateSelected"
+            >
+              <option value="" disabled>Pilih template...</option>
+              <option v-for="tpl in templates" :key="tpl.id" :value="tpl.id">{{ tpl.code }} &middot; {{ tpl.title }}</option>
+            </select>
+            <p v-if="templates.length === 0" class="mt-1 text-xs text-slate-400">Belum ada template aktif. Impor lewat Pengaturan.</p>
+          </div>
+
+          <div v-if="createSource === 'blank'" class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-xs font-medium text-slate-500">Target</label>
               <select v-model="newQuestionnaire.audience_type" class="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">

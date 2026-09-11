@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Domains\Questionnaires\Actions\CreateQuestionnaireAction;
+use App\Domains\Questionnaires\Actions\CreateQuestionnaireFromTemplateAction;
 use App\Domains\Questionnaires\Actions\FinalizeQuestionnaireAction;
 use App\Domains\Questionnaires\Actions\TransitionQuestionnaireStatusAction;
 use App\Domains\Questionnaires\Actions\UpdateQuestionnaireAction;
@@ -10,6 +11,7 @@ use App\Domains\Questionnaires\Actions\ValidateQuestionnaireStructureAction;
 use App\Domains\Questionnaires\Exceptions\QuestionnaireLockConflictException;
 use App\Domains\Questionnaires\Exceptions\QuestionnaireValidationFailedException;
 use App\Domains\Questionnaires\Models\Questionnaire;
+use App\Domains\Questionnaires\Models\SurveyTemplate;
 use App\Http\Controllers\Api\Concerns\HandlesQuestionnaireLock;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\QuestionnaireResource;
@@ -51,19 +53,46 @@ class QuestionnaireController extends Controller
         return QuestionnaireResource::collection($query->orderByDesc('updated_at')->paginate($perPage));
     }
 
-    public function store(Request $request, CreateQuestionnaireAction $action): JsonResponse
-    {
+    public function store(
+        Request $request,
+        CreateQuestionnaireAction $action,
+        CreateQuestionnaireFromTemplateAction $fromTemplateAction,
+    ): JsonResponse {
         $data = $request->validate([
             'code' => ['required', 'string', 'max:100'],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'category' => ['nullable', 'string', 'max:100'],
-            'audience_type' => ['required', 'string', 'max:100'],
-            'identity_mode' => ['required', 'string', 'max:100'],
+            'audience_type' => ['sometimes', 'string', 'max:100'],
+            'identity_mode' => ['sometimes', 'string', 'max:100'],
             'template_id' => ['nullable', 'uuid'],
         ]);
 
-        $questionnaire = $action->execute($data, Auth::user());
+        $actor = Auth::user();
+
+        if (! empty($data['template_id'])) {
+            $template = SurveyTemplate::query()
+                ->where('tenant_id', $actor->tenant_id)
+                ->find($data['template_id']);
+
+            if ($template === null) {
+                return response()->json([
+                    'error' => ['code' => 'template_not_found', 'message' => 'Template tidak ditemukan.'],
+                ], 422);
+            }
+
+            $questionnaire = $fromTemplateAction->execute($template, $data, $actor);
+
+            return (new QuestionnaireResource($questionnaire))->response()->setStatusCode(201);
+        }
+
+        if (! isset($data['audience_type'], $data['identity_mode'])) {
+            return response()->json([
+                'error' => ['code' => 'validation_failed', 'message' => 'audience_type dan identity_mode wajib diisi.'],
+            ], 422);
+        }
+
+        $questionnaire = $action->execute($data, $actor);
 
         return (new QuestionnaireResource($questionnaire))->response()->setStatusCode(201);
     }
