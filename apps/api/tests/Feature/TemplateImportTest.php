@@ -268,4 +268,35 @@ class TemplateImportTest extends TestCase
             'content' => json_encode($this->validPayload()),
         ])->assertStatus(403);
     }
+
+    #[Test]
+    public function admin_cannot_view_or_commit_staging_import_from_other_tenant(): void
+    {
+        $otherTenantImport = TemplateImport::factory()->create([
+            'tenant_id' => 'other-tenant',
+            'status' => TemplateImport::STATUS_VALIDATED,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->getJson("/api/settings/template-imports/{$otherTenantImport->id}")
+            ->assertStatus(403);
+
+        $this->actingAs($this->admin)
+            ->postJson("/api/settings/template-imports/{$otherTenantImport->id}/commit")
+            ->assertStatus(403);
+    }
+
+    #[Test]
+    public function listing_history_only_returns_own_tenant_imports(): void
+    {
+        TemplateImport::factory()->create(['tenant_id' => $this->admin->tenant_id, 'filename' => 'mine.json']);
+        TemplateImport::factory()->create(['tenant_id' => 'other-tenant', 'filename' => 'not-mine.json']);
+
+        $response = $this->actingAs($this->admin)->getJson('/api/settings/template-imports');
+
+        $response->assertOk();
+        $filenames = collect($response->json('data'))->pluck('filename');
+        $this->assertContains('mine.json', $filenames);
+        $this->assertNotContains('not-mine.json', $filenames);
+    }
 }

@@ -19,6 +19,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use RuntimeException;
 
 // FSD §17.3 — endpoint builder Kuesioner. Semua mutasi (store/update/finalize/
@@ -30,6 +31,8 @@ class QuestionnaireController extends Controller
 
     public function index(Request $request): AnonymousResourceCollection
     {
+        Gate::authorize('viewAny', Questionnaire::class);
+
         $query = Questionnaire::query();
 
         if ($search = $request->string('search')->trim()->value()) {
@@ -58,6 +61,8 @@ class QuestionnaireController extends Controller
         CreateQuestionnaireAction $action,
         CreateQuestionnaireFromTemplateAction $fromTemplateAction,
     ): JsonResponse {
+        Gate::authorize('create', Questionnaire::class);
+
         $data = $request->validate([
             'code' => ['required', 'string', 'max:100'],
             'title' => ['required', 'string', 'max:255'],
@@ -99,6 +104,7 @@ class QuestionnaireController extends Controller
 
     public function show(Questionnaire $questionnaire): QuestionnaireResource
     {
+        $this->authorizeView($questionnaire);
         $questionnaire->load(['sections.questions.options', 'sections.questions.matrixRows']);
 
         return new QuestionnaireResource($questionnaire);
@@ -106,6 +112,7 @@ class QuestionnaireController extends Controller
 
     public function update(Request $request, Questionnaire $questionnaire, UpdateQuestionnaireAction $action): QuestionnaireResource|JsonResponse
     {
+        $this->authorizeManage($questionnaire);
         $this->abortIfNotEditable($questionnaire);
 
         $data = $request->validate([
@@ -130,6 +137,7 @@ class QuestionnaireController extends Controller
 
     public function destroy(Questionnaire $questionnaire): JsonResponse
     {
+        $this->authorizeManage($questionnaire);
         $this->abortIfNotEditable($questionnaire);
 
         $questionnaire->delete();
@@ -139,6 +147,7 @@ class QuestionnaireController extends Controller
 
     public function duplicate(Questionnaire $questionnaire, CreateQuestionnaireAction $action): JsonResponse
     {
+        $this->authorizeManage($questionnaire);
         $questionnaire->loadMissing(['sections.questions.options', 'sections.questions.matrixRows']);
 
         $copy = $action->execute([
@@ -199,11 +208,15 @@ class QuestionnaireController extends Controller
 
     public function validateStructure(Questionnaire $questionnaire, ValidateQuestionnaireStructureAction $action): JsonResponse
     {
+        $this->authorizeView($questionnaire);
+
         return response()->json(['data' => $action->execute($questionnaire)]);
     }
 
     public function finalize(Request $request, Questionnaire $questionnaire, FinalizeQuestionnaireAction $action): QuestionnaireResource|JsonResponse
     {
+        $this->authorizeManage($questionnaire);
+
         try {
             $questionnaire = $action->execute($questionnaire, $this->ifMatch($request), Auth::user());
         } catch (QuestionnaireLockConflictException $e) {
@@ -223,6 +236,8 @@ class QuestionnaireController extends Controller
 
     public function transition(Request $request, Questionnaire $questionnaire, TransitionQuestionnaireStatusAction $action): QuestionnaireResource|JsonResponse
     {
+        $this->authorizeManage($questionnaire);
+
         $data = $request->validate([
             'status' => ['required', 'string', 'in:draft,active,paused,closed'],
         ]);

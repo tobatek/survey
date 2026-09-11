@@ -27,6 +27,7 @@ class QuestionController extends Controller
     public function store(Request $request, QuestionnaireSection $section): JsonResponse
     {
         $questionnaire = $section->questionnaire;
+        $this->authorizeManage($questionnaire);
         $this->abortIfNotEditable($questionnaire);
 
         $data = $request->validate([
@@ -60,6 +61,7 @@ class QuestionController extends Controller
     public function update(Request $request, Question $question): QuestionResource|JsonResponse
     {
         $questionnaire = $question->questionnaire;
+        $this->authorizeManage($questionnaire);
         $this->abortIfNotEditable($questionnaire);
 
         $data = $request->validate([
@@ -89,6 +91,7 @@ class QuestionController extends Controller
     public function destroy(Request $request, Question $question): JsonResponse
     {
         $questionnaire = $question->questionnaire;
+        $this->authorizeManage($questionnaire);
         $this->abortIfNotEditable($questionnaire);
 
         try {

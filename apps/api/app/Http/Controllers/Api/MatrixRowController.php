@@ -25,6 +25,7 @@ class MatrixRowController extends Controller
     public function store(Request $request, Question $question): JsonResponse
     {
         $questionnaire = $question->questionnaire;
+        $this->authorizeManage($questionnaire);
         $this->abortIfNotEditable($questionnaire);
 
         $data = $request->validate([
@@ -52,6 +53,7 @@ class MatrixRowController extends Controller
     public function update(Request $request, MatrixRow $matrixRow): MatrixRowResource|JsonResponse
     {
         $questionnaire = $matrixRow->question->questionnaire;
+        $this->authorizeManage($questionnaire);
         $this->abortIfNotEditable($questionnaire);
 
         $data = $request->validate([
@@ -76,6 +78,7 @@ class MatrixRowController extends Controller
     public function destroy(Request $request, MatrixRow $matrixRow): JsonResponse
     {
         $questionnaire = $matrixRow->question->questionnaire;
+        $this->authorizeManage($questionnaire);
         $this->abortIfNotEditable($questionnaire);
 
         try {

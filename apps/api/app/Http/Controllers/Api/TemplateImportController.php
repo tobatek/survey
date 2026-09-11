@@ -13,23 +13,34 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 
 // FSD §15 (slice JSON) — staging (store) selalu tersimpan baik lolos maupun
 // gagal validasi (FSD §15.4), commit hanya berhasil untuk staging berstatus
-// `validated`, belum expired, dan belum pernah di-commit.
+// `validated`, belum expired, dan belum pernah di-commit. Gate::authorize
+// (TemplateImportPolicy) menambah pemeriksaan resource-level (role + tenant)
+// sebagai pelengkap gerbang role kasar di middleware routes/api.php.
 class TemplateImportController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection
     {
+        Gate::authorize('viewAny', TemplateImport::class);
+
         $perPage = min($request->integer('per_page', 15), 100);
 
         return TemplateImportResource::collection(
-            TemplateImport::query()->with('uploader')->orderByDesc('created_at')->paginate($perPage),
+            TemplateImport::query()
+                ->where('tenant_id', Auth::user()->tenant_id)
+                ->with('uploader')
+                ->orderByDesc('created_at')
+                ->paginate($perPage),
         );
     }
 
     public function store(Request $request, ValidateTemplateImportAction $action): JsonResponse
     {
+        Gate::authorize('create', TemplateImport::class);
+
         $data = $request->validate([
             'filename' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string'],
@@ -42,11 +53,15 @@ class TemplateImportController extends Controller
 
     public function show(TemplateImport $templateImport): TemplateImportResource
     {
+        Gate::authorize('view', $templateImport);
+
         return new TemplateImportResource($templateImport->load('uploader'));
     }
 
     public function commit(TemplateImport $templateImport, CommitTemplateImportAction $action): JsonResponse
     {
+        Gate::authorize('commit', $templateImport);
+
         try {
             $template = $action->execute($templateImport, Auth::user());
         } catch (TemplateImportNotCommittableException $e) {
