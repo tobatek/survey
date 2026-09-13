@@ -241,6 +241,12 @@ onMounted(() => {
                 </span>
               </td>
               <td class="px-3 py-2 text-right">
+                <a
+                  :href="`${API_BASE}/templates/${template.id}/export`"
+                  class="mr-2 text-xs font-medium text-brand-600 hover:underline"
+                >
+                  Export
+                </a>
                 <button
                   type="button"
                   class="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50"

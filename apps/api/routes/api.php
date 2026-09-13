@@ -46,6 +46,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/questionnaires/{questionnaire}', [QuestionnaireController::class, 'show']);
         Route::get('/questionnaires/{questionnaire}/validate', [QuestionnaireController::class, 'validateStructure']);
         Route::get('/templates', [SurveyTemplateController::class, 'index']);
+        Route::get('/templates/{template}/export', [SurveyTemplateController::class, 'export']);
     });
 
     Route::middleware('role:lpm_admin,survey_operator')->group(function () {
