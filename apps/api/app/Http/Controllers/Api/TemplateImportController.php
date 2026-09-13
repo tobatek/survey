@@ -6,6 +6,7 @@ use App\Domains\Questionnaires\Actions\CommitTemplateImportAction;
 use App\Domains\Questionnaires\Actions\ValidateTemplateImportAction;
 use App\Domains\Questionnaires\Exceptions\TemplateImportNotCommittableException;
 use App\Domains\Questionnaires\Models\TemplateImport;
+use App\Domains\Questionnaires\Support\TemplateSamplePayloadToXlsx;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\SurveyTemplateResource;
 use App\Http\Resources\TemplateImportResource;
@@ -14,6 +15,8 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 // FSD §15 (slice JSON) — staging (store) selalu tersimpan baik lolos maupun
 // gagal validasi (FSD §15.4), commit hanya berhasil untuk staging berstatus
@@ -44,21 +47,47 @@ class TemplateImportController extends Controller
         $data = $request->validate([
             'filename' => ['required', 'string', 'max:255'],
             'content' => ['required', 'string'],
+            'format' => ['sometimes', 'string', 'in:json,xlsx'],
         ]);
 
-        $import = $action->execute($data['filename'], $data['content'], Auth::user());
+        $import = $action->execute($data['filename'], $data['content'], Auth::user(), $data['format'] ?? 'json');
 
         return (new TemplateImportResource($import))->response()->setStatusCode(201);
     }
 
-    // Contoh file JSON valid (FSD §17.7 "GET .../sample.xlsx" — versi JSON
-    // untuk slice ini) supaya admin tidak coba-coba upload file sembarangan
-    // (mis. kejadian upload airports.json yang jelas bukan skema template).
+    // Contoh file valid (FSD §17.7) supaya admin tidak coba-coba upload file
+    // sembarangan (mis. kejadian upload airports.json yang jelas bukan skema
+    // template). JSON dan XLSX dibangun dari data contoh yang sama
+    // (sampleTemplatePayload) supaya keduanya tidak pernah tidak-sinkron.
     public function sample(): JsonResponse
     {
         Gate::authorize('viewAny', TemplateImport::class);
 
-        $sample = [
+        return response()->json($this->sampleTemplatePayload(), 200, [
+            'Content-Disposition' => 'attachment; filename="template-sample.json"',
+        ]);
+    }
+
+    public function sampleXlsx(): StreamedResponse
+    {
+        Gate::authorize('viewAny', TemplateImport::class);
+
+        $spreadsheet = (new TemplateSamplePayloadToXlsx)->build($this->sampleTemplatePayload());
+        $writer = new Xlsx($spreadsheet);
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, 'template-sample.xlsx', [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sampleTemplatePayload(): array
+    {
+        return [
             'schema_version' => '1.0',
             'template' => [
                 'code' => 'CONTOH-001',
@@ -101,10 +130,6 @@ class TemplateImportController extends Controller
                 ],
             ],
         ];
-
-        return response()->json($sample, 200, [
-            'Content-Disposition' => 'attachment; filename="template-sample.json"',
-        ]);
     }
 
     public function show(TemplateImport $templateImport): TemplateImportResource

@@ -50,13 +50,13 @@ export const useTemplateImportStore = defineStore('templateImport', {
       state.current !== null && state.current.status === 'validated' && state.current.committed_at === null,
   },
   actions: {
-    async uploadContent(filename: string, content: string): Promise<void> {
+    async uploadContent(filename: string, content: string, format: 'json' | 'xlsx' = 'json'): Promise<void> {
       this.uploading = true
       this.current = null
       try {
         const response = await apiFetch<{ data: TemplateImportRecord }>('/settings/template-imports', {
           method: 'POST',
-          body: JSON.stringify({ filename, content }),
+          body: JSON.stringify({ filename, content, format }),
         })
         this.current = response.data
       } finally {

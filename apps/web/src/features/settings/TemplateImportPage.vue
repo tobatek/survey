@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// Wizard Import Template Kuesioner (Fase 2 slice 2, FSD §15 — slice JSON):
-// 1) pilih file .json -> 2) pratinjau error/warning per path -> 3) konfirmasi
-// & commit. Daftar template + aktif/nonaktif (FSD §17.7) di slice 7.
-// XLSX dan sample.json dicatat sebagai backlog slice berikutnya.
+// Wizard Import Template Kuesioner (FSD §15): 1) pilih file .json/.xlsx ->
+// 2) pratinjau error/warning per path -> 3) konfirmasi & commit. Daftar
+// template + aktif/nonaktif (FSD §17.7) di slice 7.
 import { computed, onMounted, ref } from 'vue'
 import AppShell from '@/features/shared/components/AppShell.vue'
 import Card from '@/features/shared/components/Card.vue'
@@ -21,16 +20,32 @@ const selectedFilename = ref<string | null>(null)
 
 const hasErrors = computed(() => (store.current?.errors.length ?? 0) > 0)
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  const chunkSize = 8192
+  let binary = ''
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
+  }
+  return btoa(binary)
+}
+
 async function onFileSelected(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
 
   selectedFilename.value = file.name
-  const content = await file.text()
+  const isXlsx = /\.xlsx$/i.test(file.name)
 
   try {
-    await store.uploadContent(file.name, content)
+    if (isXlsx) {
+      const content = arrayBufferToBase64(await file.arrayBuffer())
+      await store.uploadContent(file.name, content, 'xlsx')
+    } else {
+      const content = await file.text()
+      await store.uploadContent(file.name, content, 'json')
+    }
   } catch (error) {
     toast.push(error instanceof ApiError ? error.message : 'Gagal memvalidasi file.', 'error')
   } finally {
@@ -82,12 +97,20 @@ onMounted(() => {
       <template #header>
         <div class="flex items-center justify-between">
           <h2 class="text-sm font-semibold text-slate-900">1. Unggah File</h2>
-          <a
-            :href="`${API_BASE}/settings/template-imports/sample.json`"
-            class="text-xs font-medium text-brand-600 hover:underline"
-          >
-            Unduh Contoh (sample.json)
-          </a>
+          <div class="flex items-center gap-3 text-xs">
+            <a
+              :href="`${API_BASE}/settings/template-imports/sample.json`"
+              class="font-medium text-brand-600 hover:underline"
+            >
+              Unduh Contoh (sample.json)
+            </a>
+            <a
+              :href="`${API_BASE}/settings/template-imports/sample.xlsx`"
+              class="font-medium text-brand-600 hover:underline"
+            >
+              Unduh Contoh (sample.xlsx)
+            </a>
+          </div>
         </div>
       </template>
       <template #body>
@@ -95,7 +118,7 @@ onMounted(() => {
           <input
             ref="fileInput"
             type="file"
-            accept=".json,application/json"
+            accept=".json,application/json,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-700"
             :disabled="store.uploading"
             @change="onFileSelected"

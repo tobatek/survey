@@ -82,6 +82,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::middleware($adminViewerRoles)->group(function () {
         Route::get('/settings/template-imports', [TemplateImportController::class, 'index']);
         Route::get('/settings/template-imports/sample.json', [TemplateImportController::class, 'sample']);
+        Route::get('/settings/template-imports/sample.xlsx', [TemplateImportController::class, 'sampleXlsx']);
         Route::get('/settings/template-imports/{templateImport}', [TemplateImportController::class, 'show'])->whereUuid('templateImport');
     });
 
