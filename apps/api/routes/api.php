@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\MatrixRowController;
@@ -47,6 +48,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/questionnaires/{questionnaire}/validate', [QuestionnaireController::class, 'validateStructure']);
         Route::get('/templates', [SurveyTemplateController::class, 'index']);
         Route::get('/templates/{template}/export', [SurveyTemplateController::class, 'export']);
+        Route::get('/campaigns/{campaign}/monitoring', [CampaignController::class, 'monitoring']);
     });
 
     Route::middleware('role:lpm_admin,survey_operator')->group(function () {
@@ -75,6 +77,17 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Aktifkan/nonaktifkan template (FSD §17.7).
         Route::patch('/templates/{template}/status', [SurveyTemplateController::class, 'updateStatus']);
+
+        // Campaign (Fase 3, FSD §17.4) — slice 1: hanya pembuatan campaign
+        // draft dari questionnaire yang sudah finalized. Endpoint lain
+        // (preview/activate/pause/resume/close/monitoring/reminders)
+        // menyusul di slice berikutnya.
+        Route::post('/questionnaires/{questionnaire}/campaigns', [CampaignController::class, 'store']);
+        Route::post('/campaigns/{campaign}/audience/preview', [CampaignController::class, 'previewAudience']);
+        Route::post('/campaigns/{campaign}/activate', [CampaignController::class, 'activate']);
+        Route::post('/campaigns/{campaign}/pause', [CampaignController::class, 'pause']);
+        Route::post('/campaigns/{campaign}/resume', [CampaignController::class, 'resume']);
+        Route::post('/campaigns/{campaign}/close', [CampaignController::class, 'close']);
     });
 
     // Import Template Kuesioner (FSD §15, slice JSON) — lihat histori boleh
