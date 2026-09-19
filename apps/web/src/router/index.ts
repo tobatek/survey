@@ -27,6 +27,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/campaigns/:campaignId',
+      name: 'campaigns.detail',
+      component: () => import('@/features/campaigns/CampaignPage.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/students',
       name: 'students',
       component: () => import('@/features/students/StudentListPage.vue'),

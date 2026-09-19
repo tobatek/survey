@@ -49,6 +49,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/templates', [SurveyTemplateController::class, 'index']);
         Route::get('/templates/{template}/export', [SurveyTemplateController::class, 'export']);
         Route::get('/campaigns/{campaign}/monitoring', [CampaignController::class, 'monitoring']);
+        Route::get('/campaigns/{campaign}', [CampaignController::class, 'show']);
+        Route::get('/questionnaires/{questionnaire}/campaigns', [CampaignController::class, 'indexForQuestionnaire']);
     });
 
     Route::middleware('role:lpm_admin,survey_operator')->group(function () {
@@ -83,6 +85,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // (preview/activate/pause/resume/close/monitoring/reminders)
         // menyusul di slice berikutnya.
         Route::post('/questionnaires/{questionnaire}/campaigns', [CampaignController::class, 'store']);
+        Route::patch('/campaigns/{campaign}/schedule', [CampaignController::class, 'updateSchedule']);
         Route::post('/campaigns/{campaign}/audience/preview', [CampaignController::class, 'previewAudience']);
         Route::post('/campaigns/{campaign}/activate', [CampaignController::class, 'activate']);
         Route::post('/campaigns/{campaign}/pause', [CampaignController::class, 'pause']);

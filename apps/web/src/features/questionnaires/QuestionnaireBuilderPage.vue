@@ -17,7 +17,7 @@ import {
   type QuestionType,
   type SectionNode,
 } from './store/builder'
-import { ApiError } from '@/lib/api'
+import { apiFetch, ApiError } from '@/lib/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -28,6 +28,41 @@ const showPreview = ref(false)
 const selectedSectionId = ref<string | null>(null)
 const newSectionTitle = ref('')
 const newQuestion = reactive({ code: '', type: 'short_text' as QuestionType, text: '' })
+
+// Fase 3 — link ke Campaign. MVP: satu questionnaire punya paling banyak
+// satu campaign, jadi cukup cek apakah sudah ada lalu arahkan tombolnya.
+const existingCampaignId = ref<string | null>(null)
+const creatingCampaign = ref(false)
+
+async function loadExistingCampaign() {
+  if (!store.questionnaire) return
+  try {
+    const response = await apiFetch<{ data: { id: string }[] }>(`/questionnaires/${store.questionnaire.id}/campaigns`)
+    existingCampaignId.value = response.data[0]?.id ?? null
+  } catch {
+    existingCampaignId.value = null
+  }
+}
+
+async function goToCampaign() {
+  if (existingCampaignId.value) {
+    router.push({ name: 'campaigns.detail', params: { campaignId: existingCampaignId.value } })
+    return
+  }
+
+  if (!store.questionnaire) return
+  creatingCampaign.value = true
+  try {
+    const response = await apiFetch<{ data: { id: string } }>(`/questionnaires/${store.questionnaire.id}/campaigns`, {
+      method: 'POST',
+    })
+    router.push({ name: 'campaigns.detail', params: { campaignId: response.data.id } })
+  } catch (error) {
+    toast.push(error instanceof ApiError ? error.message : 'Gagal membuat campaign.', 'error')
+  } finally {
+    creatingCampaign.value = false
+  }
+}
 
 const selectedSection = computed<SectionNode | null>(() => {
   if (!store.questionnaire || !selectedSectionId.value) return null
@@ -49,6 +84,10 @@ async function loadQuestionnaire() {
       selectedSectionId.value = store.questionnaire.sections[0].id
     }
   }, 'Gagal memuat kuesioner.')
+
+  if (store.questionnaire && store.questionnaire.status !== 'draft') {
+    await loadExistingCampaign()
+  }
 }
 
 async function addSection() {
@@ -240,6 +279,15 @@ onMounted(loadQuestionnaire)
             @click="runFinalize"
           >
             Finalisasi
+          </button>
+          <button
+            v-if="store.questionnaire.status !== 'draft'"
+            type="button"
+            class="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
+            :disabled="creatingCampaign"
+            @click="goToCampaign"
+          >
+            {{ existingCampaignId ? 'Lihat Campaign' : 'Buat Campaign' }}
           </button>
         </div>
       </div>

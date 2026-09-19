@@ -46,6 +46,43 @@ class CampaignController extends Controller
         return (new CampaignResource($campaign))->response()->setStatusCode(201);
     }
 
+    public function show(Campaign $campaign): CampaignResource
+    {
+        Gate::authorize('view', $campaign);
+
+        return new CampaignResource($campaign);
+    }
+
+    public function indexForQuestionnaire(Questionnaire $questionnaire): JsonResponse
+    {
+        Gate::authorize('viewAny', Campaign::class);
+
+        abort_if($questionnaire->tenant_id !== Auth::user()->tenant_id, 404);
+
+        return CampaignResource::collection($questionnaire->campaigns()->get())->response();
+    }
+
+    public function updateSchedule(Request $request, Campaign $campaign): CampaignResource|JsonResponse
+    {
+        Gate::authorize('manage', $campaign);
+
+        abort_if(
+            $campaign->status !== Campaign::STATUS_DRAFT,
+            422,
+            'Jadwal hanya bisa diubah selama campaign berstatus draft.',
+        );
+
+        $data = $request->validate([
+            'starts_at' => ['nullable', 'date'],
+            'ends_at' => ['nullable', 'date', 'after:starts_at'],
+            'timezone' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $campaign->update($data);
+
+        return new CampaignResource($campaign->fresh());
+    }
+
     public function previewAudience(Request $request, Campaign $campaign, PreviewAudienceAction $action): JsonResponse
     {
         Gate::authorize('manage', $campaign);

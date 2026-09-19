@@ -2,6 +2,7 @@
 
 namespace App\Domains\Questionnaires\Models;
 
+use App\Domains\Campaigns\Models\Campaign;
 use App\Models\User;
 use Database\Factories\QuestionnaireFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -73,6 +74,11 @@ class Questionnaire extends Model
     public function snapshots(): HasMany
     {
         return $this->hasMany(QuestionnaireSnapshot::class);
+    }
+
+    public function campaigns(): HasMany
+    {
+        return $this->hasMany(Campaign::class);
     }
 
     public function template(): BelongsTo
