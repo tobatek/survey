@@ -1,9 +1,7 @@
 <script setup lang="ts">
 // Halaman detail satu Campaign. Selama status draft, tampilkan wizard
 // (target -> jadwal -> aktivasi). Begitu aktif/dijeda/ditutup, tampilkan
-// ringkasan sederhana -- dashboard pemantauan penuh (funnel, breakdown)
-// menyusul di giliran berikutnya (slice 7b), supaya campaign yang sudah
-// aktif tidak jadi jalan buntu kalau halaman ini dibuka.
+// dashboard pemantauan (funnel, breakdown, tombol pause/resume/close).
 import { onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppShell from '@/features/shared/components/AppShell.vue'
@@ -13,6 +11,7 @@ import { NAV_ITEMS } from '@/router/nav'
 import { ApiError } from '@/lib/api'
 import { useCampaignStore } from './store/campaign'
 import CampaignWizard from './components/CampaignWizard.vue'
+import CampaignMonitoringDashboard from './components/CampaignMonitoringDashboard.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -47,14 +46,7 @@ onMounted(loadCampaign)
 
       <CampaignWizard v-if="store.campaign.status === 'draft'" class="mt-4" />
 
-      <div v-else class="mt-4 rounded-xl border border-slate-200 bg-white p-5">
-        <p class="text-sm text-slate-600">
-          Campaign ini sudah <strong>{{ store.campaign.status }}</strong>, tidak bisa diedit lagi lewat wizard.
-        </p>
-        <p class="mt-2 text-xs text-slate-400">
-          Total target: {{ store.campaign.denominator_count ?? '-' }}. Dashboard pemantauan lengkap (funnel &amp; rincian per kelompok) menyusul.
-        </p>
-      </div>
+      <CampaignMonitoringDashboard v-else />
     </template>
   </AppShell>
 </template>

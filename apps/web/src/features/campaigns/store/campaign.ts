@@ -47,12 +47,39 @@ export interface AudiencePreviewResult {
   employees: { count: number; breakdown: Record<string, number> }
 }
 
+export interface CampaignFunnel {
+  eligible: number
+  invited: number
+  opened: number
+  started: number
+  completed: number
+  expired: number
+  excluded: number
+}
+
+export interface CampaignBreakdownGroup {
+  group: string
+  total: number
+  completed: number
+}
+
+export interface CampaignMonitoring {
+  denominator_count: number
+  funnel: CampaignFunnel
+  response_rate: number
+  breakdown: {
+    students: CampaignBreakdownGroup[]
+    employees: CampaignBreakdownGroup[]
+  }
+}
+
 export const useCampaignStore = defineStore('campaign', {
   state: () => ({
     campaign: null as CampaignDetail | null,
     loading: false,
     saving: false,
     previewResult: null as AudiencePreviewResult | null,
+    monitoring: null as CampaignMonitoring | null,
   }),
   actions: {
     async load(id: string): Promise<void> {
@@ -105,6 +132,29 @@ export const useCampaignStore = defineStore('campaign', {
     async activate(): Promise<void> {
       if (!this.campaign) return
       await this.mutate(() => apiFetch(`/campaigns/${this.campaign!.id}/activate`, { method: 'POST' }))
+    },
+
+    async loadMonitoring(id: string): Promise<void> {
+      const response = await apiFetch<{ data: CampaignMonitoring }>(`/campaigns/${id}/monitoring`)
+      this.monitoring = response.data
+    },
+
+    async pause(): Promise<void> {
+      if (!this.campaign) return
+      await this.mutate(() => apiFetch(`/campaigns/${this.campaign!.id}/pause`, { method: 'POST' }))
+      await this.loadMonitoring(this.campaign.id)
+    },
+
+    async resume(): Promise<void> {
+      if (!this.campaign) return
+      await this.mutate(() => apiFetch(`/campaigns/${this.campaign!.id}/resume`, { method: 'POST' }))
+      await this.loadMonitoring(this.campaign.id)
+    },
+
+    async close(): Promise<void> {
+      if (!this.campaign) return
+      await this.mutate(() => apiFetch(`/campaigns/${this.campaign!.id}/close`, { method: 'POST' }))
+      await this.loadMonitoring(this.campaign.id)
     },
   },
 })
