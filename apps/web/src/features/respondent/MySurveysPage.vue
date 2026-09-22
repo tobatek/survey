@@ -1,8 +1,52 @@
 <script setup lang="ts">
 // My Surveys — halaman responden (mahasiswa/pegawai), tanpa sidebar admin.
 // Ini yang paling wajib mobile-first (dipakai dari HP) — FSD §11.1.
+import { computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import Card from '@/features/shared/components/Card.vue'
-import StatusBadge from '@/features/shared/components/StatusBadge.vue'
+import StatusBadge, { type SurveyStatus } from '@/features/shared/components/StatusBadge.vue'
+import { useToast } from '@/features/shared/useToast'
+import { ApiError } from '@/lib/api'
+import { useMySurveysStore, type MySurveyItem, type RespondentStatus } from './store/mySurveys'
+
+const store = useMySurveysStore()
+const router = useRouter()
+const toast = useToast()
+
+const STATUS_BADGE: Record<RespondentStatus, SurveyStatus> = {
+  not_started: 'ready',
+  draft: 'active',
+  completed: 'closed',
+  closed: 'closed',
+}
+
+const BUTTON_LABEL: Record<RespondentStatus, string> = {
+  not_started: 'Mulai Mengisi',
+  draft: 'Lanjutkan Mengisi',
+  completed: 'Selesai',
+  closed: 'Ditutup',
+}
+
+const items = computed(() => store.items)
+
+async function handleStart(item: MySurveyItem) {
+  if (item.respondent_status === 'completed' || item.respondent_status === 'closed') return
+
+  try {
+    const sessionId = await store.start(item.eligibility_id)
+    router.push({ name: 'survey.fill', params: { sessionId } })
+  } catch (error) {
+    toast.push(error instanceof ApiError ? error.message : 'Gagal memulai survei.', 'error')
+  }
+}
+
+onMounted(async () => {
+  try {
+    await store.load()
+  } catch (error) {
+    toast.push(error instanceof ApiError ? error.message : 'Gagal memuat daftar survei.', 'error')
+  }
+})
 </script>
 
 <template>
@@ -18,18 +62,29 @@ import StatusBadge from '@/features/shared/components/StatusBadge.vue'
       <h1 class="text-lg font-semibold text-slate-900">Survei Saya</h1>
       <p class="mt-1 text-sm text-slate-500">Daftar survei yang ditujukan untuk Anda.</p>
 
-      <div class="mt-6 space-y-3">
-        <Card clickable>
+      <div v-if="store.loading" class="mt-6 text-sm text-slate-400">Memuat...</div>
+
+      <div v-else-if="!items.length" class="mt-6 rounded-xl border border-slate-200 bg-white p-5 text-sm text-slate-400">
+        Belum ada survei yang ditujukan untuk Anda.
+      </div>
+
+      <div v-else class="mt-6 space-y-3">
+        <Card v-for="item in items" :key="item.eligibility_id" clickable>
           <template #header>
-            <p class="text-xs text-slate-400">Layanan Mahasiswa &middot; ~5 menit</p>
-            <h2 class="text-sm font-semibold text-slate-900">Survei Kepuasan Mahasiswa 2026</h2>
+            <p v-if="item.category" class="text-xs text-slate-400">{{ item.category }}</p>
+            <h2 class="text-sm font-semibold text-slate-900">{{ item.title }}</h2>
           </template>
           <template #badge>
-            <StatusBadge status="active" />
+            <StatusBadge :status="STATUS_BADGE[item.respondent_status]" />
           </template>
           <template #actions>
-            <button class="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white sm:w-auto">
-              Mulai Mengisi
+            <button
+              type="button"
+              class="w-full rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 sm:w-auto"
+              :disabled="store.starting || item.respondent_status === 'completed' || item.respondent_status === 'closed'"
+              @click="handleStart(item)"
+            >
+              {{ BUTTON_LABEL[item.respondent_status] }}
             </button>
           </template>
         </Card>

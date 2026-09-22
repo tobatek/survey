@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\QuestionController;
 use App\Http\Controllers\Api\QuestionnaireController;
 use App\Http\Controllers\Api\QuestionnaireSectionController;
 use App\Http\Controllers\Api\QuestionOptionController;
+use App\Http\Controllers\Api\RespondentSurveyController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\SurveyTemplateController;
 use App\Http\Controllers\Api\SyncRunController;
@@ -17,8 +18,16 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/health/ready', [HealthController::class, 'ready']);
 
+// FSD §11 jalur anonymous -- link token undangan, tidak pernah login.
+Route::post('/my-surveys/start-by-token', [RespondentSurveyController::class, 'startByToken']);
+
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [SsoController::class, 'me']);
+
+    // FSD §11 jalur identified -- boleh diakses siapa saja yang login,
+    // bukan cuma role admin (dipakai mahasiswa/pegawai biasa).
+    Route::get('/me/surveys', [RespondentSurveyController::class, 'mySurveys']);
+    Route::post('/my-surveys/{eligibility}/start', [RespondentSurveyController::class, 'start']);
 
     // FSD §5.3 tabel otorisasi: data mahasiswa/pegawai bisa dilihat admin,
     // operator (scope terbatas — belum diberlakukan di Fase 1), dan viewer

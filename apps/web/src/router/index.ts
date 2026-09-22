@@ -63,6 +63,16 @@ const router = createRouter({
       meta: { requiresRespondent: true },
     },
     {
+      path: '/survei/mulai',
+      name: 'survey.token-start',
+      component: () => import('@/features/respondent/SurveyTokenStartPage.vue'),
+    },
+    {
+      path: '/survei/isi/:sessionId',
+      name: 'survey.fill',
+      component: () => import('@/features/respondent/SurveyFillPage.vue'),
+    },
+    {
       path: '/_style-guide',
       name: 'style-guide',
       component: () => import('@/features/shared/StyleGuidePage.vue'),
