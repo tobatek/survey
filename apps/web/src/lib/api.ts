@@ -11,6 +11,7 @@ export class ApiError extends Error {
     public readonly status: number,
     public readonly code?: string,
     public readonly correlationId?: string,
+    public readonly fields?: unknown,
   ) {
     super(message)
   }
@@ -52,6 +53,7 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
       response.status,
       body?.error?.code,
       body?.error?.correlation_id,
+      body?.error?.fields,
     )
   }
 

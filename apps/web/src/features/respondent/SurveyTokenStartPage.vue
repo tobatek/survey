@@ -29,7 +29,11 @@ onMounted(async () => {
 
   try {
     const sessionId = await store.startByToken(token)
-    router.replace({ name: 'survey.fill', params: { sessionId } })
+    // Token ikut dibawa lewat query -- dibutuhkan lagi saat submit final
+    // (mode anonymous wajib kirim ulang token, lihat SubmitResponseAction
+    // backend). Tidak menambah risiko: token ini sudah ada di URL sejak
+    // link undangan awal.
+    router.replace({ name: 'survey.fill', params: { sessionId }, query: { token } })
   } catch (error) {
     if (error instanceof ApiError) {
       errorMessage.value = (error.code && ERROR_MESSAGES[error.code]) ?? error.message
