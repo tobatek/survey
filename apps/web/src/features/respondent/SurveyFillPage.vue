@@ -25,6 +25,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   SESSION_EXPIRED: 'Waktu pengisian survei ini sudah habis.',
   STALE_DRAFT: 'Draft sudah diperbarui dari perangkat/tab lain.',
   SUBMISSION_IN_PROGRESS: 'Pengiriman jawaban sedang diproses, coba lagi sesaat lagi.',
+  SERVICE_TEMPORARILY_UNAVAILABLE: 'Layanan sedang tidak tersedia. Coba lagi sesaat lagi.',
   VALIDATION_FAILED: 'Ada jawaban yang belum lengkap atau belum sesuai.',
 }
 

@@ -47,9 +47,19 @@ class SubmitResponseAction
             return $replay;
         }
 
-        $lock = Cache::lock("response-session:{$session->id}", 30);
+        // Beda dari SUBMISSION_IN_PROGRESS (lock dipegang proses lain --
+        // kondisi bisnis normal): exception di sini berarti layer cache/lock
+        // itu sendiri gagal (mis. Redis down), bukan sekadar sedang dipakai.
+        // Cache::lock() maupun ->block() bisa sama-sama melempar exception
+        // tergantung driver, jadi dua-duanya dibungkus.
+        try {
+            $lock = Cache::lock("response-session:{$session->id}", 30);
+            $acquired = $lock->block(5);
+        } catch (\Throwable $e) {
+            throw new SurveyAccessException('SERVICE_TEMPORARILY_UNAVAILABLE', 'Layanan sedang tidak tersedia. Coba lagi sesaat lagi.');
+        }
 
-        if (! $lock->block(5)) {
+        if (! $acquired) {
             throw new SurveyAccessException('SUBMISSION_IN_PROGRESS', 'Pengiriman jawaban lain untuk sesi ini sedang diproses. Coba lagi sesaat lagi.');
         }
 

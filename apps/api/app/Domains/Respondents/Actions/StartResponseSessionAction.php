@@ -45,6 +45,7 @@ class StartResponseSessionAction
                     'segment_snapshot_json' => $eligibility->audienceMember->attributes_snapshot_json,
                     'status' => ResponseSession::STATUS_DRAFT,
                     'started_at' => now(),
+                    'expires_at' => now()->addDays(ResponseSession::DRAFT_TTL_DAYS),
                     'tenant_id' => $campaign->tenant_id,
                 ]);
             }

@@ -32,6 +32,12 @@ class ResponseSession extends Model
 
     public const STATUS_EXPIRED = 'expired';
 
+    // Fase 4 slice 6 -- TTL sesi draft, rolling (disegarkan tiap autosave,
+    // lihat StartResponseSessionAction & SaveDraftAction). Dipakai
+    // Console\Commands\ExpireStaleResponseSessionsCommand untuk menandai
+    // sesi yang benar-benar ditinggalkan.
+    public const DRAFT_TTL_DAYS = 7;
+
     protected static function newFactory(): ResponseSessionFactory
     {
         return ResponseSessionFactory::new();

@@ -31,3 +31,12 @@ Schedule::command('campaigns:close-expired')->everyMinute()->withoutOverlapping(
 // FSD §10.5 — reminder, jarak minimal & jam tenang dicek di dalam action
 // tiap kali command ini jalan, jadi aman dijadwalkan tiap jam.
 Schedule::command('campaigns:send-reminders')->hourly()->withoutOverlapping();
+
+// Fase 4 slice 6 — TTL sesi draft harian (ResponseSession::DRAFT_TTL_DAYS),
+// tidak perlu presisi menit seperti campaign start/end, jadi cukup tiap jam.
+Schedule::command('responses:expire-stale-sessions')->hourly()->withoutOverlapping();
+
+// Fase 4 slice 6 — idempotency_keys.expires_at diisi SubmitResponseAction
+// (now()->addDay() saat submit sukses), dibersihkan tiap jam sama seperti
+// template-imports:prune-expired.
+Schedule::command('idempotency-keys:prune-expired')->hourly()->withoutOverlapping();

@@ -5,7 +5,9 @@ namespace App\Domains\Campaigns\Actions;
 use App\Domains\Audit\Actions\RecordAuditEventAction;
 use App\Domains\Campaigns\Exceptions\CampaignTransitionConflictException;
 use App\Domains\Campaigns\Models\Campaign;
+use App\Domains\Campaigns\Models\Eligibility;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 // FSD §17.4/§10.4 — pause/resume/close. Campaign tidak pakai lock_version/
@@ -38,10 +40,27 @@ class TransitionCampaignStatusAction
             $attributes['closed_at'] = now();
         }
 
-        $affected = Campaign::query()
-            ->where('id', $campaign->id)
-            ->where('status', $campaign->status)
-            ->update($attributes);
+        $affected = DB::transaction(function () use ($campaign, $targetStatus, $attributes) {
+            $affected = Campaign::query()
+                ->where('id', $campaign->id)
+                ->where('status', $campaign->status)
+                ->update($attributes);
+
+            // Fase 4 slice 6 -- eligibility yang belum terminal (belum
+            // completed/excluded) ditutup begitu campaign-nya ditutup. Ini
+            // satu-satunya jalur aman menandai eligibility mode ANONYMOUS
+            // sebagai expired: sesi anonymous sengaja tidak pernah menyimpan
+            // eligibility_id (kontrak privasi slice 1), jadi tidak bisa
+            // ditelusuri dari sisi sesi -- harus lewat siklus hidup campaign.
+            if ($affected > 0 && $targetStatus === Campaign::STATUS_CLOSED) {
+                Eligibility::query()
+                    ->where('campaign_id', $campaign->id)
+                    ->whereNotIn('status', [Eligibility::STATUS_COMPLETED, Eligibility::STATUS_EXCLUDED])
+                    ->update(['status' => Eligibility::STATUS_EXPIRED, 'expired_at' => now()]);
+            }
+
+            return $affected;
+        });
 
         if ($affected === 0) {
             throw new CampaignTransitionConflictException;

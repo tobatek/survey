@@ -42,7 +42,9 @@ class ResponseController extends Controller
     {
         $this->authorizeIdentifiedAccess($session);
 
-        $data = $request->validate(['answers' => ['required', 'array']]);
+        // 'present' (bukan 'required') -- array kosong sah: user boleh
+        // mengosongkan seluruh draft-nya (mis. batalkan semua jawaban).
+        $data = $request->validate(['answers' => ['present', 'array']]);
 
         try {
             $session = $action->execute($session, $data['answers'], $this->ifMatch($request));
@@ -98,7 +100,11 @@ class ResponseController extends Controller
 
     private function accessErrorResponse(SurveyAccessException $e): JsonResponse
     {
-        $status = $e->errorCode === 'SUBMISSION_IN_PROGRESS' ? 409 : 422;
+        $status = match ($e->errorCode) {
+            'SUBMISSION_IN_PROGRESS' => 409,
+            'SERVICE_TEMPORARILY_UNAVAILABLE' => 503,
+            default => 422,
+        };
 
         return response()->json(['error' => ['code' => $e->errorCode, 'message' => $e->getMessage()]], $status);
     }

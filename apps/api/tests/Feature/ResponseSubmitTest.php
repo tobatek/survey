@@ -13,6 +13,7 @@ use App\Domains\Respondents\Models\SurveyResponse;
 use App\Domains\Students\Models\Student;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -313,6 +314,25 @@ class ResponseSubmitTest extends TestCase
         );
 
         $response->assertStatus(422)->assertJsonPath('error.code', 'NOT_ELIGIBLE');
+        $this->assertSame(0, SurveyResponse::query()->count());
+    }
+
+    #[Test]
+    public function lock_backend_failure_is_reported_as_service_temporarily_unavailable(): void
+    {
+        [$session, $user] = $this->makeIdentifiedSubmittableSession([
+            'q1' => 'only', 'q2' => 'to_s4', 'q4' => 'isian bagian 4',
+        ]);
+
+        Cache::shouldReceive('lock')->once()->andThrow(new \RuntimeException('cache backend unreachable'));
+
+        $response = $this->actingAs($user)->postJson(
+            "/api/responses/{$session->id}/submit",
+            [],
+            ['Idempotency-Key' => 'key-lock-down'],
+        );
+
+        $response->assertStatus(503)->assertJsonPath('error.code', 'SERVICE_TEMPORARILY_UNAVAILABLE');
         $this->assertSame(0, SurveyResponse::query()->count());
     }
 }

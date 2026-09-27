@@ -45,6 +45,9 @@ class SaveDraftAction
 
             $session->draft_answers_json = $this->reachability->stripUnreachableAnswers($structure, $answers);
             $session->last_saved_at = now();
+            // TTL rolling (slice 6) -- responden yang masih aktif mengisi
+            // tidak boleh kena expire di tengah jalan.
+            $session->expires_at = now()->addDays(ResponseSession::DRAFT_TTL_DAYS);
             $session->save();
             $this->lockGuard->bump($session);
 

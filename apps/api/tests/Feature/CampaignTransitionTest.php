@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Domains\Campaigns\Actions\TransitionCampaignStatusAction;
 use App\Domains\Campaigns\Exceptions\CampaignTransitionConflictException;
+use App\Domains\Campaigns\Models\AudienceMember;
 use App\Domains\Campaigns\Models\Campaign;
+use App\Domains\Campaigns\Models\Eligibility;
 use App\Domains\Identity\Models\Role;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
@@ -92,6 +94,35 @@ class CampaignTransitionTest extends TestCase
         $this->expectException(CampaignTransitionConflictException::class);
 
         app(TransitionCampaignStatusAction::class)->execute($staleCampaign, Campaign::STATUS_PAUSED);
+    }
+
+    #[Test]
+    public function closing_a_campaign_expires_non_terminal_eligibilities_only(): void
+    {
+        $campaign = Campaign::factory()->create(['tenant_id' => 'default', 'status' => Campaign::STATUS_ACTIVE]);
+
+        $started = Eligibility::factory()->create([
+            'campaign_id' => $campaign->id,
+            'audience_member_id' => AudienceMember::factory()->create(['campaign_id' => $campaign->id])->id,
+            'status' => Eligibility::STATUS_STARTED,
+        ]);
+        $completed = Eligibility::factory()->create([
+            'campaign_id' => $campaign->id,
+            'audience_member_id' => AudienceMember::factory()->create(['campaign_id' => $campaign->id])->id,
+            'status' => Eligibility::STATUS_COMPLETED,
+        ]);
+        $excluded = Eligibility::factory()->create([
+            'campaign_id' => $campaign->id,
+            'audience_member_id' => AudienceMember::factory()->create(['campaign_id' => $campaign->id])->id,
+            'status' => Eligibility::STATUS_EXCLUDED,
+        ]);
+
+        $this->actingAs($this->admin)->postJson("/api/campaigns/{$campaign->id}/close")->assertOk();
+
+        $this->assertSame(Eligibility::STATUS_EXPIRED, $started->fresh()->status);
+        $this->assertNotNull($started->fresh()->expired_at);
+        $this->assertSame(Eligibility::STATUS_COMPLETED, $completed->fresh()->status);
+        $this->assertSame(Eligibility::STATUS_EXCLUDED, $excluded->fresh()->status);
     }
 
     #[Test]
