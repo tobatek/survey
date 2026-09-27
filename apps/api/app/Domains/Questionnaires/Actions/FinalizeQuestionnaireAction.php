@@ -95,6 +95,13 @@ class FinalizeQuestionnaireAction
                         'label' => $option->label,
                         'numeric_score' => $option->numeric_score,
                         'target_section_id' => $option->target_section_id,
+                        // Fase 5 §13.4 -- "definisi positive option berada
+                        // pada snapshot skala, bukan hard-coded": rumus
+                        // persentase kepuasan butuh field ini immutable dari
+                        // snapshot, bukan query balik ke question_options
+                        // live yang bisa berubah setelah campaign berjalan.
+                        'is_positive' => $option->is_positive,
+                        'is_not_applicable' => $option->is_not_applicable,
                     ])->all(),
                     'matrix_rows' => $question->matrixRows->map(fn ($row) => [
                         'id' => $row->id,
