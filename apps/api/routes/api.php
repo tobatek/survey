@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\QuestionnaireController;
 use App\Http\Controllers\Api\QuestionnaireSectionController;
 use App\Http\Controllers\Api\QuestionOptionController;
 use App\Http\Controllers\Api\RespondentSurveyController;
+use App\Http\Controllers\Api\ResponseDraftController;
 use App\Http\Controllers\Api\StudentController;
 use App\Http\Controllers\Api\SurveyTemplateController;
 use App\Http\Controllers\Api\SyncRunController;
@@ -20,6 +21,14 @@ Route::get('/health/ready', [HealthController::class, 'ready']);
 
 // FSD §11 jalur anonymous -- link token undangan, tidak pernah login.
 Route::post('/my-surveys/start-by-token', [RespondentSurveyController::class, 'startByToken']);
+
+// FSD §11.2/§11.3/§17.2 -- draft & autosave (Fase 4 slice 3). Sengaja di
+// luar grup auth:sanctum supaya mode anonymous (tanpa login) tetap bisa
+// akses; otorisasi mode identified dicek manual di controller (lihat
+// Concerns\HandlesDraftLock) karena statefulApi() tetap mengisi Auth::user()
+// dari cookie sesi walau route ini tidak diproteksi middleware auth:sanctum.
+Route::get('/responses/{session}', [ResponseDraftController::class, 'show']);
+Route::put('/responses/{session}/draft', [ResponseDraftController::class, 'save']);
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [SsoController::class, 'me']);
