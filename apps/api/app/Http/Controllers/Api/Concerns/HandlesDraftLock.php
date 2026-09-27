@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 
-// Dipakai ResponseDraftController -- meniru pola
+// Dipakai ResponseController -- meniru pola
 // App\Http\Controllers\Api\Concerns\HandlesQuestionnaireLock (If-Match/409),
 // ditambah pembagian otorisasi identified vs anonymous (FSD §11 & §17.2):
 // route draft ada DI LUAR middleware auth:sanctum supaya mode anonymous
