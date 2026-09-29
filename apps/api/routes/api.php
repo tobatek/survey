@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\HealthController;
@@ -71,6 +72,12 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/campaigns/{campaign}/monitoring', [CampaignController::class, 'monitoring']);
         Route::get('/campaigns/{campaign}', [CampaignController::class, 'show']);
         Route::get('/questionnaires/{questionnaire}/campaigns', [CampaignController::class, 'indexForQuestionnaire']);
+
+        // Hasil Analisa Kuesioner (Fase 5 slice 2, FSD §17.6) -- query
+        // langsung, belum ada filter/threshold per-pertanyaan (slice 3).
+        Route::get('/analytics/campaigns', [AnalyticsController::class, 'index']);
+        Route::get('/analytics/campaigns/{campaign}/summary', [AnalyticsController::class, 'summary']);
+        Route::get('/analytics/campaigns/{campaign}/questions', [AnalyticsController::class, 'questions']);
     });
 
     Route::middleware('role:lpm_admin,survey_operator')->group(function () {

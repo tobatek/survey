@@ -4,6 +4,7 @@ namespace App\Domains\Campaigns\Models;
 
 use App\Domains\Questionnaires\Models\Questionnaire;
 use App\Domains\Questionnaires\Models\QuestionnaireSnapshot;
+use App\Domains\Respondents\Models\SurveyResponse;
 use App\Models\User;
 use Database\Factories\CampaignFactory;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
@@ -83,5 +84,10 @@ class Campaign extends Model
     public function activator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'activated_by');
+    }
+
+    public function responses(): HasMany
+    {
+        return $this->hasMany(SurveyResponse::class);
     }
 }
