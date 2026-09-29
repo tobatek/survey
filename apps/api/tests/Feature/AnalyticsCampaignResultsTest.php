@@ -2,7 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Domains\Campaigns\Models\AudienceMember;
 use App\Domains\Campaigns\Models\Campaign;
+use App\Domains\Campaigns\Models\Eligibility;
 use App\Domains\Identity\Models\Role;
 use App\Domains\Questionnaires\Models\QuestionnaireSnapshot;
 use App\Domains\Respondents\Models\Answer;
@@ -108,6 +110,11 @@ class AnalyticsCampaignResultsTest extends TestCase
             'status' => Campaign::STATUS_CLOSED,
             'snapshot_id' => $this->snapshot->id,
             'denominator_count' => 4,
+            // Golden dataset sengaja kecil (n=1-3) supaya persentase gampang
+            // dihitung manual -- threshold diturunkan ke 1 di sini supaya
+            // TIDAK ikut tersensor SegmentSizeGate (slice 3). Suppression
+            // sendiri diuji terpisah dengan threshold eksplisit lebih tinggi.
+            'minimum_segment_size' => 1,
         ]);
     }
 
@@ -220,6 +227,12 @@ class AnalyticsCampaignResultsTest extends TestCase
     public function summary_computes_response_rate_and_completion_rate(): void
     {
         $this->seedGoldenDataset();
+
+        // Funnel/response_rate slice 3 digerbang SegmentSizeGate juga --
+        // butuh minimal 1 eligibility completed (threshold di setUp = 1)
+        // supaya summary tidak ikut tersensor di test ini.
+        $member = AudienceMember::factory()->create(['campaign_id' => $this->campaign->id]);
+        Eligibility::factory()->create(['campaign_id' => $this->campaign->id, 'audience_member_id' => $member->id, 'status' => Eligibility::STATUS_COMPLETED]);
 
         ResponseSession::factory()->create(['campaign_id' => $this->campaign->id, 'status' => ResponseSession::STATUS_COMPLETED]);
         ResponseSession::factory()->create(['campaign_id' => $this->campaign->id, 'status' => ResponseSession::STATUS_COMPLETED]);
@@ -350,5 +363,129 @@ class AnalyticsCampaignResultsTest extends TestCase
         $this->actingAs($this->admin)
             ->getJson("/api/analytics/campaigns/{$otherCampaign->id}/summary")
             ->assertStatus(403);
+    }
+
+    #[Test]
+    public function question_search_filters_question_list(): void
+    {
+        $this->seedGoldenDataset();
+
+        $response = $this->actingAs($this->admin)
+            ->getJson("/api/analytics/campaigns/{$this->campaign->id}/questions?question_search=kepuasan");
+
+        $response->assertOk();
+        $codes = collect($response->json('data.sections.0.questions'))->pluck('code');
+        $this->assertSame(['Q3'], $codes->all());
+    }
+
+    #[Test]
+    public function segment_filter_and_per_question_suppression_work_together(): void
+    {
+        // Skenario terpisah (bukan golden dataset di atas) -- dua
+        // pertanyaan sederhana dengan n berbeda per segmen, supaya jelas
+        // filter + suppression per-pertanyaan (bukan seluruh endpoint)
+        // benar-benar independen antar pertanyaan.
+        $snapshot = QuestionnaireSnapshot::factory()->create([
+            'structure_json' => [
+                'sections' => [[
+                    'code' => 'S1', 'title' => 'Bagian 1',
+                    'questions' => [
+                        [
+                            'code' => 'QA', 'type' => 'single_choice', 'text' => 'Pertanyaan A',
+                            'options' => [['code' => 'A1', 'label' => 'A1', 'is_positive' => false]],
+                            'matrix_rows' => [],
+                        ],
+                        [
+                            'code' => 'QB', 'type' => 'single_choice', 'text' => 'Pertanyaan B',
+                            'options' => [['code' => 'B1', 'label' => 'B1', 'is_positive' => false]],
+                            'matrix_rows' => [],
+                        ],
+                    ],
+                ]],
+            ],
+        ]);
+
+        $campaign = Campaign::factory()->create([
+            'tenant_id' => 'default',
+            'status' => Campaign::STATUS_CLOSED,
+            'snapshot_id' => $snapshot->id,
+            'minimum_segment_size' => 2,
+        ]);
+
+        $teknik1 = SurveyResponse::factory()->create([
+            'campaign_id' => $campaign->id, 'snapshot_id' => $snapshot->id,
+            'segment_snapshot_json' => ['faculty_name' => 'Teknik', 'program_study_code' => 'TI'],
+        ]);
+        $teknik2 = SurveyResponse::factory()->create([
+            'campaign_id' => $campaign->id, 'snapshot_id' => $snapshot->id,
+            'segment_snapshot_json' => ['faculty_name' => 'Teknik', 'program_study_code' => 'TI'],
+        ]);
+        $ekonomi = SurveyResponse::factory()->create([
+            'campaign_id' => $campaign->id, 'snapshot_id' => $snapshot->id,
+            'segment_snapshot_json' => ['faculty_name' => 'Ekonomi', 'program_study_code' => 'MJ'],
+        ]);
+
+        // QA dijawab semua 3 responden (Teknik x2 + Ekonomi x1).
+        foreach ([$teknik1, $teknik2, $ekonomi] as $r) {
+            $a = Answer::factory()->create(['response_id' => $r->id, 'snapshot_question_code' => 'QA', 'value_type' => 'single_choice', 'text_value' => null]);
+            AnswerChoice::factory()->create(['answer_id' => $a->id, 'option_code' => 'A1']);
+        }
+        // QB hanya dijawab 1 responden Teknik.
+        $a = Answer::factory()->create(['response_id' => $teknik1->id, 'snapshot_question_code' => 'QB', 'value_type' => 'single_choice', 'text_value' => null]);
+        AnswerChoice::factory()->create(['answer_id' => $a->id, 'option_code' => 'B1']);
+
+        $response = $this->actingAs($this->admin)
+            ->getJson("/api/analytics/campaigns/{$campaign->id}/questions?faculty_names[]=Teknik");
+        $response->assertOk();
+
+        $questions = collect($response->json('data.sections.0.questions'))->keyBy('code');
+
+        // QA: n hasil filter = 2 (Teknik x2) >= threshold 2 -> tampil normal.
+        $this->assertArrayNotHasKey('suppressed', $questions['QA']['result']);
+        $this->assertSame(2, $questions['QA']['result']['n']);
+
+        // QB: n hasil filter = 1 (cuma teknik1) < threshold 2 -> disensor.
+        $this->assertTrue($questions['QB']['result']['suppressed']);
+        $this->assertSame(1, $questions['QB']['result']['n']);
+    }
+
+    #[Test]
+    public function summary_is_suppressed_when_filtered_completed_count_is_below_threshold(): void
+    {
+        $campaign = Campaign::factory()->create([
+            'tenant_id' => 'default',
+            'minimum_segment_size' => 2,
+            'denominator_count' => 3,
+        ]);
+
+        $teknik = AudienceMember::factory()->create([
+            'campaign_id' => $campaign->id,
+            'subject_type' => AudienceMember::SUBJECT_STUDENT,
+            'attributes_snapshot_json' => ['faculty_name' => 'Teknik'],
+        ]);
+        Eligibility::factory()->create(['campaign_id' => $campaign->id, 'audience_member_id' => $teknik->id, 'status' => Eligibility::STATUS_COMPLETED]);
+
+        foreach (range(1, 2) as $i) {
+            $ekonomi = AudienceMember::factory()->create([
+                'campaign_id' => $campaign->id,
+                'subject_type' => AudienceMember::SUBJECT_STUDENT,
+                'attributes_snapshot_json' => ['faculty_name' => 'Ekonomi'],
+            ]);
+            Eligibility::factory()->create(['campaign_id' => $campaign->id, 'audience_member_id' => $ekonomi->id, 'status' => Eligibility::STATUS_COMPLETED]);
+        }
+
+        // Filter ke Teknik -> completed=1 < threshold 2 -> disensor total.
+        $suppressed = $this->actingAs($this->admin)
+            ->getJson("/api/analytics/campaigns/{$campaign->id}/summary?faculty_names[]=Teknik");
+        $suppressed->assertOk();
+        $suppressed->assertJsonPath('data.suppressed', true);
+        $this->assertArrayNotHasKey('funnel', $suppressed->json('data'));
+
+        // Filter ke Ekonomi -> completed=2 >= threshold 2 -> tampil normal.
+        $visible = $this->actingAs($this->admin)
+            ->getJson("/api/analytics/campaigns/{$campaign->id}/summary?faculty_names[]=Ekonomi");
+        $visible->assertOk();
+        $visible->assertJsonPath('data.funnel.completed', 2);
+        $this->assertArrayNotHasKey('suppressed', $visible->json('data'));
     }
 }

@@ -2,35 +2,36 @@
 
 namespace App\Domains\Analytics\Support;
 
+use App\Domains\Analytics\DTO\AnalyticsFilterDTO;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
-// FSD §13.4/§13.5 (Fase 5 slice 2) — menghitung hasil per pertanyaan dari
+// FSD §13.4/§13.5 (Fase 5 slice 2-3) — menghitung hasil per pertanyaan dari
 // data mentah `answers`/`answer_choices`, di-scope ke satu campaign lewat
-// join `responses.campaign_id`. Sumber definisi pertanyaan/opsi SELALU
-// snapshot immutable (array dari `structure_json`), bukan model live
-// Question/QuestionOption -- pola sama DraftReachabilityCalculator (Fase 4)
-// dan AnswerShapeValidator. Query di sini query langsung (belum
-// materialized, itu Fase 5 slice 4) dan TANPA threshold suppression
-// per-opsi (itu slice 3) -- angka di sini campaign-wide.
+// join `responses.campaign_id`, ditambah filter segmen (`SegmentFilterScope`)
+// dan threshold suppression per-pertanyaan (`SegmentSizeGate`, slice 3).
+// Sumber definisi pertanyaan/opsi SELALU snapshot immutable (array dari
+// structure_json), bukan model live Question/QuestionOption -- pola sama
+// DraftReachabilityCalculator (Fase 4) dan AnswerShapeValidator. Query di
+// sini query langsung (belum materialized, itu Fase 5 slice 4).
 final class QuestionResultCalculator
 {
     /**
      * @param  array<string, mixed>  $question  satu entri `sections[].questions[]` dari structure_json
      * @return array<string, mixed>
      */
-    public function forQuestion(string $campaignId, array $question): array
+    public function forQuestion(string $campaignId, array $question, AnalyticsFilterDTO $filter, int $minimumSegmentSize): array
     {
         return match ($question['type']) {
-            'single_choice', 'dropdown' => $this->choiceResult($campaignId, $question, withScore: false),
-            'likert' => $this->choiceResult($campaignId, $question, withScore: true),
-            'multiple_choice' => $this->multipleChoiceResult($campaignId, $question),
-            'matrix' => $this->matrixResult($campaignId, $question),
-            'number' => $this->numberResult($campaignId, $question),
-            'date' => $this->dateResult($campaignId, $question),
-            'short_text', 'long_text' => $this->textResult($campaignId, $question),
+            'single_choice', 'dropdown' => $this->choiceResult($campaignId, $question, $filter, $minimumSegmentSize, withScore: false),
+            'likert' => $this->choiceResult($campaignId, $question, $filter, $minimumSegmentSize, withScore: true),
+            'multiple_choice' => $this->multipleChoiceResult($campaignId, $question, $filter, $minimumSegmentSize),
+            'matrix' => $this->matrixResult($campaignId, $question, $filter, $minimumSegmentSize),
+            'number' => $this->numberResult($campaignId, $question, $filter, $minimumSegmentSize),
+            'date' => $this->dateResult($campaignId, $question, $filter, $minimumSegmentSize),
+            'short_text', 'long_text' => $this->textResult($campaignId, $question, $filter, $minimumSegmentSize),
             default => throw new RuntimeException("Tipe pertanyaan tidak dikenal: {$question['type']}"),
         };
     }
@@ -39,19 +40,23 @@ final class QuestionResultCalculator
      * @param  array<string, mixed>  $question
      * @return array<string, mixed>
      */
-    private function choiceResult(string $campaignId, array $question, bool $withScore): array
+    private function choiceResult(string $campaignId, array $question, AnalyticsFilterDTO $filter, int $minimumSegmentSize, bool $withScore): array
     {
-        $validAnswerCount = $this->answerQuery($campaignId, $question['code'])
+        $validAnswerCount = $this->answerQuery($campaignId, $question['code'], $filter)
             ->where('answers.is_not_applicable', false)
             ->count();
+
+        if (SegmentSizeGate::isSuppressed($validAnswerCount, $minimumSegmentSize)) {
+            return ['suppressed' => true, 'n' => $validAnswerCount];
+        }
 
         $positiveOptionCodes = collect($question['options'])
             ->filter(fn ($option) => (bool) ($option['is_positive'] ?? false))
             ->pluck('code')
             ->all();
 
-        $options = collect($question['options'])->map(function (array $option) use ($campaignId, $question, $validAnswerCount) {
-            $optionCount = $this->choiceCountQuery($campaignId, $question['code'], $option['code'])->count();
+        $options = collect($question['options'])->map(function (array $option) use ($campaignId, $question, $filter, $validAnswerCount) {
+            $optionCount = $this->choiceCountQuery($campaignId, $question['code'], $option['code'], $filter)->count();
 
             return [
                 'option_code' => $option['code'],
@@ -66,12 +71,12 @@ final class QuestionResultCalculator
         ];
 
         if ($withScore) {
-            $scores = $this->scoreQuery($campaignId, $question['code'])->pluck('answer_choices.numeric_score')
+            $scores = $this->scoreQuery($campaignId, $question['code'], $filter)->pluck('answer_choices.numeric_score')
                 ->map(fn ($score) => (float) $score)
                 ->all();
 
             $positiveCount = $positiveOptionCodes === [] ? 0 : collect($positiveOptionCodes)
-                ->sum(fn ($code) => $this->choiceCountQuery($campaignId, $question['code'], $code)->count());
+                ->sum(fn ($code) => $this->choiceCountQuery($campaignId, $question['code'], $code, $filter)->count());
 
             $result['mean'] = AnalyticsFormulas::mean($scores);
             $result['median'] = AnalyticsFormulas::median($scores);
@@ -87,14 +92,18 @@ final class QuestionResultCalculator
      * @param  array<string, mixed>  $question
      * @return array<string, mixed>
      */
-    private function multipleChoiceResult(string $campaignId, array $question): array
+    private function multipleChoiceResult(string $campaignId, array $question, AnalyticsFilterDTO $filter, int $minimumSegmentSize): array
     {
-        $respondentsWithValidAnswer = $this->answerQuery($campaignId, $question['code'])
+        $respondentsWithValidAnswer = $this->answerQuery($campaignId, $question['code'], $filter)
             ->where('answers.is_not_applicable', false)
             ->count();
 
-        $options = collect($question['options'])->map(function (array $option) use ($campaignId, $question, $respondentsWithValidAnswer) {
-            $respondentsSelecting = $this->choiceCountQuery($campaignId, $question['code'], $option['code'])
+        if (SegmentSizeGate::isSuppressed($respondentsWithValidAnswer, $minimumSegmentSize)) {
+            return ['suppressed' => true, 'n' => $respondentsWithValidAnswer];
+        }
+
+        $options = collect($question['options'])->map(function (array $option) use ($campaignId, $question, $filter, $respondentsWithValidAnswer) {
+            $respondentsSelecting = $this->choiceCountQuery($campaignId, $question['code'], $option['code'], $filter)
                 ->distinct('answer_choices.answer_id')
                 ->count('answer_choices.answer_id');
 
@@ -115,20 +124,27 @@ final class QuestionResultCalculator
      * @param  array<string, mixed>  $question
      * @return array<string, mixed>
      */
-    private function matrixResult(string $campaignId, array $question): array
+    private function matrixResult(string $campaignId, array $question, AnalyticsFilterDTO $filter, int $minimumSegmentSize): array
     {
         $positiveOptionCodes = collect($question['options'])
             ->filter(fn ($option) => (bool) ($option['is_positive'] ?? false))
             ->pluck('code')
             ->all();
 
-        $rows = collect($question['matrix_rows'])->map(function (array $row) use ($campaignId, $question, $positiveOptionCodes) {
-            $validAnswerCount = $this->answerQuery($campaignId, $question['code'], $row['code'])
+        // Threshold dicek PER BARIS (bukan per pertanyaan) -- satu matrix
+        // bisa punya baris dengan n jauh berbeda (mis. baris "opsional")
+        // walau filter yang dipakai sama.
+        $rows = collect($question['matrix_rows'])->map(function (array $row) use ($campaignId, $question, $filter, $minimumSegmentSize, $positiveOptionCodes) {
+            $validAnswerCount = $this->answerQuery($campaignId, $question['code'], $filter, $row['code'])
                 ->where('answers.is_not_applicable', false)
                 ->count();
 
-            $options = collect($question['options'])->map(function (array $option) use ($campaignId, $question, $row, $validAnswerCount) {
-                $optionCount = $this->choiceCountQuery($campaignId, $question['code'], $option['code'], $row['code'])->count();
+            if (SegmentSizeGate::isSuppressed($validAnswerCount, $minimumSegmentSize)) {
+                return ['row_code' => $row['code'], 'label' => $row['label'], 'suppressed' => true, 'n' => $validAnswerCount];
+            }
+
+            $options = collect($question['options'])->map(function (array $option) use ($campaignId, $question, $filter, $row, $validAnswerCount) {
+                $optionCount = $this->choiceCountQuery($campaignId, $question['code'], $option['code'], $filter, $row['code'])->count();
 
                 return [
                     'option_code' => $option['code'],
@@ -137,13 +153,13 @@ final class QuestionResultCalculator
                 ];
             })->all();
 
-            $scores = $this->scoreQuery($campaignId, $question['code'], $row['code'])
+            $scores = $this->scoreQuery($campaignId, $question['code'], $filter, $row['code'])
                 ->pluck('answer_choices.numeric_score')
                 ->map(fn ($score) => (float) $score)
                 ->all();
 
             $positiveCount = $positiveOptionCodes === [] ? 0 : collect($positiveOptionCodes)
-                ->sum(fn ($code) => $this->choiceCountQuery($campaignId, $question['code'], $code, $row['code'])->count());
+                ->sum(fn ($code) => $this->choiceCountQuery($campaignId, $question['code'], $code, $filter, $row['code'])->count());
 
             return [
                 'row_code' => $row['code'],
@@ -165,14 +181,18 @@ final class QuestionResultCalculator
      * @param  array<string, mixed>  $question
      * @return array<string, mixed>
      */
-    private function numberResult(string $campaignId, array $question): array
+    private function numberResult(string $campaignId, array $question, AnalyticsFilterDTO $filter, int $minimumSegmentSize): array
     {
-        $values = $this->answerQuery($campaignId, $question['code'])
+        $values = $this->answerQuery($campaignId, $question['code'], $filter)
             ->where('answers.is_not_applicable', false)
             ->whereNotNull('answers.numeric_value')
             ->pluck('answers.numeric_value')
             ->map(fn ($value) => (float) $value)
             ->all();
+
+        if (SegmentSizeGate::isSuppressed(count($values), $minimumSegmentSize)) {
+            return ['suppressed' => true, 'n' => count($values)];
+        }
 
         return [
             'n' => count($values),
@@ -187,9 +207,9 @@ final class QuestionResultCalculator
      * @param  array<string, mixed>  $question
      * @return array<string, mixed>
      */
-    private function dateResult(string $campaignId, array $question): array
+    private function dateResult(string $campaignId, array $question, AnalyticsFilterDTO $filter, int $minimumSegmentSize): array
     {
-        $buckets = $this->answerQuery($campaignId, $question['code'])
+        $buckets = $this->answerQuery($campaignId, $question['code'], $filter)
             ->where('answers.is_not_applicable', false)
             ->whereNotNull('answers.date_value')
             ->selectRaw('answers.date_value as date, count(*) as total')
@@ -202,8 +222,14 @@ final class QuestionResultCalculator
             ->map(fn ($row) => ['date' => Carbon::parse($row->date)->toDateString(), 'count' => (int) $row->total])
             ->all();
 
+        $n = array_sum(array_column($buckets, 'count'));
+
+        if (SegmentSizeGate::isSuppressed($n, $minimumSegmentSize)) {
+            return ['suppressed' => true, 'n' => $n];
+        }
+
         return [
-            'n' => array_sum(array_column($buckets, 'count')),
+            'n' => $n,
             'buckets' => $buckets,
         ];
     }
@@ -212,18 +238,22 @@ final class QuestionResultCalculator
      * @param  array<string, mixed>  $question
      * @return array<string, mixed>
      */
-    private function textResult(string $campaignId, array $question): array
+    private function textResult(string $campaignId, array $question, AnalyticsFilterDTO $filter, int $minimumSegmentSize): array
     {
         // Isi jawaban esai TIDAK dikembalikan di sini -- itu domain endpoint
         // `.../comments` (role-gated, paginated, di luar scope slice 2).
-        $n = $this->answerQuery($campaignId, $question['code'])
+        $n = $this->answerQuery($campaignId, $question['code'], $filter)
             ->where('answers.is_not_applicable', false)
             ->count();
+
+        if (SegmentSizeGate::isSuppressed($n, $minimumSegmentSize)) {
+            return ['suppressed' => true, 'n' => $n];
+        }
 
         return ['n' => $n];
     }
 
-    private function answerQuery(string $campaignId, string $questionCode, ?string $matrixRowCode = null): Builder
+    private function answerQuery(string $campaignId, string $questionCode, AnalyticsFilterDTO $filter, ?string $matrixRowCode = null): Builder
     {
         $query = DB::table('answers')
             ->join('responses', 'responses.id', '=', 'answers.response_id')
@@ -234,10 +264,12 @@ final class QuestionResultCalculator
             $query->where('answers.matrix_row_code', $matrixRowCode);
         }
 
+        SegmentFilterScope::applyToResponseScope($query, $filter);
+
         return $query;
     }
 
-    private function choiceCountQuery(string $campaignId, string $questionCode, string $optionCode, ?string $matrixRowCode = null): Builder
+    private function choiceCountQuery(string $campaignId, string $questionCode, string $optionCode, AnalyticsFilterDTO $filter, ?string $matrixRowCode = null): Builder
     {
         $query = DB::table('answer_choices')
             ->join('answers', 'answers.id', '=', 'answer_choices.answer_id')
@@ -251,10 +283,12 @@ final class QuestionResultCalculator
             $query->where('answers.matrix_row_code', $matrixRowCode);
         }
 
+        SegmentFilterScope::applyToResponseScope($query, $filter);
+
         return $query;
     }
 
-    private function scoreQuery(string $campaignId, string $questionCode, ?string $matrixRowCode = null): Builder
+    private function scoreQuery(string $campaignId, string $questionCode, AnalyticsFilterDTO $filter, ?string $matrixRowCode = null): Builder
     {
         $query = DB::table('answer_choices')
             ->join('answers', 'answers.id', '=', 'answer_choices.answer_id')
@@ -267,6 +301,8 @@ final class QuestionResultCalculator
         if ($matrixRowCode !== null) {
             $query->where('answers.matrix_row_code', $matrixRowCode);
         }
+
+        SegmentFilterScope::applyToResponseScope($query, $filter);
 
         return $query;
     }
