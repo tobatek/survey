@@ -129,6 +129,36 @@ class ExportDownloadTest extends TestCase
     }
 
     #[Test]
+    public function pdf_export_downloads_with_pdf_filename_extension(): void
+    {
+        $job = $this->makeSucceededJobWithFile([
+            'format' => ExportJob::FORMAT_PDF,
+            'file_path' => 'exports/default/'.str()->uuid().'.pdf',
+        ]);
+
+        $url = URL::temporarySignedRoute('exports.download', now()->addMinutes(15), ['export' => $job->id]);
+        $response = $this->actingAs($this->admin)->get($url);
+
+        $response->assertOk();
+        $this->assertStringContainsString('.pdf', (string) $response->headers->get('content-disposition'));
+    }
+
+    #[Test]
+    public function png_export_downloads_with_png_filename_extension(): void
+    {
+        $job = $this->makeSucceededJobWithFile([
+            'format' => ExportJob::FORMAT_PNG,
+            'file_path' => 'exports/default/'.str()->uuid().'.png',
+        ]);
+
+        $url = URL::temporarySignedRoute('exports.download', now()->addMinutes(15), ['export' => $job->id]);
+        $response = $this->actingAs($this->admin)->get($url);
+
+        $response->assertOk();
+        $this->assertStringContainsString('.png', (string) $response->headers->get('content-disposition'));
+    }
+
+    #[Test]
     public function job_not_yet_succeeded_returns_404(): void
     {
         $job = ExportJob::factory()->create([

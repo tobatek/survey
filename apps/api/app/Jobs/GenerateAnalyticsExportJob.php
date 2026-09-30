@@ -8,7 +8,9 @@ use App\Domains\Analytics\DTO\AnalyticsFilterDTO;
 use App\Domains\Analytics\Exceptions\ExportCampaignNotFoundException;
 use App\Domains\Analytics\Models\ExportJob;
 use App\Domains\Analytics\Support\AnalyticsCsvExportBuilder;
+use App\Domains\Analytics\Support\AnalyticsPdfExportBuilder;
 use App\Domains\Analytics\Support\AnalyticsXlsxExportBuilder;
+use App\Domains\Analytics\Support\FunnelBarChartRenderer;
 use App\Domains\Campaigns\Models\Campaign;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -52,6 +54,8 @@ class GenerateAnalyticsExportJob implements ShouldQueue
         CampaignQuestionResultsAction $questionsAction,
         AnalyticsXlsxExportBuilder $xlsxBuilder,
         AnalyticsCsvExportBuilder $csvBuilder,
+        AnalyticsPdfExportBuilder $pdfBuilder,
+        FunnelBarChartRenderer $chartRenderer,
     ): void {
         $exportJob = $this->exportJob->fresh();
 
@@ -82,22 +86,34 @@ class GenerateAnalyticsExportJob implements ShouldQueue
 
         try {
             $filter = AnalyticsFilterDTO::fromArray($exportJob->filter_json ?? []);
-            $questions = $questionsAction->execute($campaign, $filter);
+
+            // Data yang di-fetch disesuaikan per format -- hemat query yang
+            // tidak dipakai (mis. format csv/png tidak perlu keduanya).
+            $needsQuestions = in_array($exportJob->format, [ExportJob::FORMAT_XLSX, ExportJob::FORMAT_CSV, ExportJob::FORMAT_PDF], true);
+            $needsSummary = in_array($exportJob->format, [ExportJob::FORMAT_XLSX, ExportJob::FORMAT_PDF, ExportJob::FORMAT_PNG], true);
+
+            $questions = $needsQuestions ? $questionsAction->execute($campaign, $filter) : null;
+            $summary = $needsSummary ? $summaryAction->execute($campaign, $filter) : null;
+            $questionnaireTitle = $exportJob->format !== ExportJob::FORMAT_CSV
+                ? ($campaign->questionnaire()->value('title') ?? 'Survei')
+                : null;
 
             $directory = "exports/{$exportJob->tenant_id}/{$campaign->id}";
             $filename = Str::uuid().'.'.$exportJob->format;
             $tempPath = tempnam(sys_get_temp_dir(), 'export_');
 
-            if ($exportJob->format === ExportJob::FORMAT_CSV) {
-                // Dataset Question Results saja slice ini -- summary tidak
-                // dibutuhkan, hemat satu query yang tidak dipakai.
-                file_put_contents($tempPath, $csvBuilder->build($questions));
-            } else {
-                $summary = $summaryAction->execute($campaign, $filter);
-                $questionnaireTitle = $campaign->questionnaire()->value('title') ?? 'Survei';
-                $spreadsheet = $xlsxBuilder->build($campaign, $questionnaireTitle, $exportJob->requestedBy, $filter, $summary, $questions);
-                (new Xlsx($spreadsheet))->save($tempPath);
-            }
+            match ($exportJob->format) {
+                ExportJob::FORMAT_XLSX => (new Xlsx(
+                    $xlsxBuilder->build($campaign, $questionnaireTitle, $exportJob->requestedBy, $filter, $summary, $questions)
+                ))->save($tempPath),
+                ExportJob::FORMAT_CSV => file_put_contents($tempPath, $csvBuilder->build($questions)),
+                ExportJob::FORMAT_PDF => file_put_contents($tempPath, $pdfBuilder->build(
+                    $campaign, $questionnaireTitle, $exportJob->requestedBy, $filter, $summary, $questions
+                )),
+                ExportJob::FORMAT_PNG => file_put_contents($tempPath, $chartRenderer->render(
+                    $campaign, $questionnaireTitle, $filter, $summary
+                )),
+            };
 
             Storage::disk('local')->putFileAs($directory, new File($tempPath), $filename);
 

@@ -253,6 +253,75 @@ class GenerateAnalyticsExportJobTest extends TestCase
     }
 
     #[Test]
+    public function pdf_export_succeeds_and_produces_a_valid_pdf_file(): void
+    {
+        $this->seedAnswers(2, 1);
+        $exportJob = ExportJob::factory()->create([
+            'tenant_id' => 'default',
+            'campaign_id' => $this->campaign->id,
+            'requested_by' => $this->requestedBy->id,
+            'format' => ExportJob::FORMAT_PDF,
+            'filter_json' => [],
+        ]);
+
+        $job = new GenerateAnalyticsExportJob($exportJob);
+        app()->call([$job, 'handle']);
+
+        $exportJob->refresh();
+        $this->assertSame(ExportJob::STATUS_SUCCEEDED, $exportJob->status);
+        $this->assertStringEndsWith('.pdf', $exportJob->file_path);
+        $this->assertGreaterThan(0, $exportJob->file_size);
+
+        $absolutePath = Storage::disk('local')->path($exportJob->file_path);
+        $this->assertSame('application/pdf', mime_content_type($absolutePath));
+        $this->assertStringStartsWith('%PDF-', file_get_contents($absolutePath, false, null, 0, 5));
+    }
+
+    #[Test]
+    public function pdf_export_succeeds_when_summary_is_suppressed(): void
+    {
+        $this->campaign->update(['minimum_segment_size' => 50]);
+        $this->seedAnswers(2, 1);
+        $exportJob = ExportJob::factory()->create([
+            'tenant_id' => 'default',
+            'campaign_id' => $this->campaign->id,
+            'requested_by' => $this->requestedBy->id,
+            'format' => ExportJob::FORMAT_PDF,
+            'filter_json' => [],
+        ]);
+
+        $job = new GenerateAnalyticsExportJob($exportJob);
+        app()->call([$job, 'handle']);
+
+        $exportJob->refresh();
+        $this->assertSame(ExportJob::STATUS_SUCCEEDED, $exportJob->status);
+    }
+
+    #[Test]
+    public function png_export_succeeds_and_produces_a_valid_png_image(): void
+    {
+        $exportJob = ExportJob::factory()->create([
+            'tenant_id' => 'default',
+            'campaign_id' => $this->campaign->id,
+            'requested_by' => $this->requestedBy->id,
+            'format' => ExportJob::FORMAT_PNG,
+            'filter_json' => [],
+        ]);
+
+        $job = new GenerateAnalyticsExportJob($exportJob);
+        app()->call([$job, 'handle']);
+
+        $exportJob->refresh();
+        $this->assertSame(ExportJob::STATUS_SUCCEEDED, $exportJob->status);
+        $this->assertStringEndsWith('.png', $exportJob->file_path);
+
+        $absolutePath = Storage::disk('local')->path($exportJob->file_path);
+        $info = getimagesizefromstring(file_get_contents($absolutePath));
+        $this->assertNotFalse($info);
+        $this->assertSame('image/png', $info['mime']);
+    }
+
+    #[Test]
     public function transient_failure_is_rethrown_so_queue_retry_applies(): void
     {
         $this->seedAnswers(1, 1);
