@@ -87,6 +87,14 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/exports/{export}', [ExportController::class, 'show']);
     });
 
+    // Komentar esai (Fase 5 slice 6 bagian 1, FSD §17.6/§12.2/§5.3) --
+    // tier otorisasi TERPISAH dari $adminViewerRoles di atas. LPM Admin dkk
+    // TIDAK otomatis bisa akses ini, cuma role raw_data_analyst (lihat
+    // CampaignPolicy::viewComments).
+    Route::middleware('role:raw_data_analyst')->group(function () {
+        Route::get('/analytics/campaigns/{campaign}/comments', [AnalyticsController::class, 'comments']);
+    });
+
     // Signed route terpisah dari grup adminViewerRoles di atas supaya
     // middleware `signed` (validasi HMAC+expiry query string) berjalan
     // BERSAMA middleware role -- bukan pengganti otorisasi Gate, tapi
