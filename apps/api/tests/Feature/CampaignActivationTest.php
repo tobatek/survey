@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Domains\Campaigns\Events\CampaignActivated;
 use App\Domains\Campaigns\Models\Campaign;
 use App\Domains\Identity\Models\Role;
+use App\Domains\Questionnaires\Models\Questionnaire;
+use App\Domains\Questionnaires\Models\QuestionnaireSnapshot;
 use App\Domains\Students\Models\Student;
 use App\Models\User;
 use Database\Seeders\RoleSeeder;
@@ -28,6 +30,27 @@ class CampaignActivationTest extends TestCase
         $this->admin->roles()->attach(Role::query()->where('code', Role::LPM_ADMIN)->first());
     }
 
+    // Bug ditemukan 2026-10-01 (uji end-to-end manual via browser): campaign
+    // yang dibuat lewat Campaign::factory() default punya Questionnaire
+    // draft tanpa snapshot -- di dunia nyata itu tidak mungkin terjadi
+    // (campaign cuma bisa dibuat dari questionnaire yang sudah finalized,
+    // Fase 3 slice 1), tapi factory lama tidak merefleksikan itu sehingga
+    // ActivateCampaignAction::execute() tidak pernah benar-benar diuji
+    // dengan kondisi realistis (snapshot_checksum questionnaire terisi +
+    // QuestionnaireSnapshot yang cocok ada) -- inilah kenapa bug
+    // "snapshot_id tidak pernah diisi saat aktivasi" lolos dari semua test
+    // sebelumnya.
+    private function finalizedQuestionnaire(): Questionnaire
+    {
+        $snapshot = QuestionnaireSnapshot::factory()->create();
+        $snapshot->questionnaire()->update([
+            'status' => Questionnaire::STATUS_READY,
+            'snapshot_checksum' => $snapshot->checksum,
+        ]);
+
+        return $snapshot->questionnaire()->first();
+    }
+
     #[Test]
     public function activating_a_campaign_materializes_audience_and_eligibilities(): void
     {
@@ -37,6 +60,7 @@ class CampaignActivationTest extends TestCase
 
         $campaign = Campaign::factory()->create([
             'tenant_id' => 'default',
+            'questionnaire_id' => $this->finalizedQuestionnaire()->id,
             'target_rule_json' => ['program_study_codes' => ['TI']],
         ]);
 
@@ -45,6 +69,7 @@ class CampaignActivationTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('data.status', Campaign::STATUS_ACTIVE);
         $response->assertJsonPath('data.denominator_count', 5);
+        $this->assertNotNull($campaign->fresh()->snapshot_id);
 
         $this->assertDatabaseCount('audience_members', 5);
         $this->assertDatabaseCount('eligibilities', 5);
@@ -69,6 +94,7 @@ class CampaignActivationTest extends TestCase
 
         $campaign = Campaign::factory()->create([
             'tenant_id' => 'default',
+            'questionnaire_id' => $this->finalizedQuestionnaire()->id,
             'target_rule_json' => ['program_study_codes' => ['TI']],
         ]);
 
@@ -95,6 +121,7 @@ class CampaignActivationTest extends TestCase
 
         $campaign = Campaign::factory()->create([
             'tenant_id' => 'default',
+            'questionnaire_id' => $this->finalizedQuestionnaire()->id,
             'target_rule_json' => ['program_study_codes' => ['TI']],
         ]);
 
@@ -126,6 +153,7 @@ class CampaignActivationTest extends TestCase
     {
         $campaign = Campaign::factory()->create([
             'tenant_id' => 'default',
+            'questionnaire_id' => $this->finalizedQuestionnaire()->id,
             'target_rule_json' => ['program_study_codes' => ['TIDAK-ADA']],
         ]);
 

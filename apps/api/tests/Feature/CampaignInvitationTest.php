@@ -8,6 +8,7 @@ use App\Domains\Campaigns\Models\Campaign;
 use App\Domains\Campaigns\Models\DeliveryAttempt;
 use App\Domains\Campaigns\Models\Eligibility;
 use App\Domains\Questionnaires\Models\Questionnaire;
+use App\Domains\Questionnaires\Models\QuestionnaireSnapshot;
 use App\Domains\Students\Models\Student;
 use App\Jobs\SendCampaignInvitationsJob;
 use App\Notifications\CampaignInvitationNotification;
@@ -89,7 +90,13 @@ class CampaignInvitationTest extends TestCase
     {
         Queue::fake();
 
-        $questionnaire = Questionnaire::factory()->create(['status' => Questionnaire::STATUS_READY]);
+        // Bug ditemukan 2026-10-01 (uji end-to-end manual) -- questionnaire
+        // WAJIB punya snapshot_checksum yang cocok dengan QuestionnaireSnapshot
+        // sungguhan, kalau tidak ActivateCampaignAction menolak aktivasi
+        // (lihat komentar di ActivateCampaignAction soal snapshot_id).
+        $snapshot = QuestionnaireSnapshot::factory()->create();
+        $questionnaire = $snapshot->questionnaire()->first();
+        $questionnaire->update(['status' => Questionnaire::STATUS_READY, 'snapshot_checksum' => $snapshot->checksum]);
         Student::factory()->create(['tenant_id' => 'default', 'program_study_code' => 'TI']);
 
         $campaign = Campaign::factory()->create([

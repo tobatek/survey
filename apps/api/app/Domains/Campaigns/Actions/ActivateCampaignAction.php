@@ -89,6 +89,24 @@ class ActivateCampaignAction
             );
         }
 
+        // Bug ditemukan saat uji end-to-end manual (2026-10-01): snapshot_id
+        // TIDAK PERNAH diisi di sini sejak awal -- setiap campaign yang
+        // diaktifkan lewat alur normal akan gagal total saat responden buka
+        // form (ResponseSession butuh snapshot_id NOT NULL, lihat migration
+        // campaigns "snapshot_id diisi saat aktivasi"). Questionnaire wajib
+        // sudah finalized sebelum campaign bisa dibuat (Fase 3 slice 1),
+        // jadi snapshot_checksum pasti terisi di titik ini -- exception di
+        // bawah murni pengaman defensif, bukan alur normal yang diharapkan.
+        $questionnaire = $campaign->questionnaire;
+        $snapshot = $questionnaire->snapshots()->where('checksum', $questionnaire->snapshot_checksum)->first();
+
+        if ($snapshot === null) {
+            throw new CampaignNotActivatableException(
+                'snapshot_missing',
+                'Kuesioner belum punya snapshot final, aktivasi ditolak.',
+            );
+        }
+
         $filter = AudienceFilterDTO::fromArray($campaign->target_rule_json);
         $preview = $this->previewAudience->execute($campaign, $filter);
 
@@ -110,6 +128,7 @@ class ActivateCampaignAction
         $denominatorCount = AudienceMember::query()->where('campaign_id', $campaign->id)->count();
 
         $campaign->status = Campaign::STATUS_ACTIVE;
+        $campaign->snapshot_id = $snapshot->id;
         $campaign->denominator_count = $denominatorCount;
         $campaign->activated_by = $actor?->id;
         $campaign->activated_at = now();
