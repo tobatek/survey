@@ -131,66 +131,15 @@ final class AnalyticsXlsxExportBuilder
         $sheet->fromArray(['Section', 'Kode Pertanyaan', 'Teks Pertanyaan', 'Tipe', 'n', 'Ringkasan'], null, 'A1');
 
         $row = 2;
-        foreach ($questions['sections'] as $section) {
-            foreach ($section['questions'] as $question) {
-                $result = $question['result'];
-
-                $sheet->setCellValueExplicit("A{$row}", $section['title'], DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit("B{$row}", $question['code'], DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit("C{$row}", $question['text'], DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit("D{$row}", $question['type'], DataType::TYPE_STRING);
-                $sheet->setCellValue("E{$row}", $this->questionN($result));
-                $sheet->setCellValueExplicit("F{$row}", $this->questionSummary($result), DataType::TYPE_STRING);
-                $row++;
-            }
+        foreach (QuestionResultRowFormatter::rows($questions) as $line) {
+            $sheet->setCellValueExplicit("A{$row}", $line['section'], DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit("B{$row}", $line['code'], DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit("C{$row}", $line['text'], DataType::TYPE_STRING);
+            $sheet->setCellValueExplicit("D{$row}", $line['type'], DataType::TYPE_STRING);
+            $sheet->setCellValue("E{$row}", $line['n']);
+            $sheet->setCellValueExplicit("F{$row}", $line['summary'], DataType::TYPE_STRING);
+            $row++;
         }
-    }
-
-    /**
-     * @param  array<string, mixed>  $result
-     */
-    private function questionN(array $result): int
-    {
-        return $result['n'] ?? 0;
-    }
-
-    /**
-     * @param  array<string, mixed>  $result
-     */
-    private function questionSummary(array $result): string
-    {
-        if ($result['suppressed'] ?? false) {
-            return 'Disembunyikan (di bawah ambang batas)';
-        }
-
-        if (array_key_exists('rows', $result)) {
-            return count($result['rows']).' baris matrix -- lihat sheet Choice Distribution';
-        }
-
-        $parts = [];
-        if (array_key_exists('mean', $result) && $result['mean'] !== null) {
-            $parts[] = sprintf('mean=%.4f', $result['mean']);
-        }
-        if (array_key_exists('median', $result) && $result['median'] !== null) {
-            $parts[] = sprintf('median=%.4f', $result['median']);
-        }
-        if (array_key_exists('min', $result) && $result['min'] !== null) {
-            $parts[] = sprintf('min=%.4f', $result['min']);
-        }
-        if (array_key_exists('max', $result) && $result['max'] !== null) {
-            $parts[] = sprintf('max=%.4f', $result['max']);
-        }
-        if (isset($result['positive_rate']['value']) && $result['positive_rate']['value'] !== null) {
-            $parts[] = sprintf('positive_rate=%.4f%%', $result['positive_rate']['value']);
-        }
-        if (array_key_exists('options', $result)) {
-            $parts[] = 'lihat sheet Choice Distribution';
-        }
-        if (array_key_exists('buckets', $result)) {
-            $parts[] = count($result['buckets']).' bucket tanggal -- lihat n';
-        }
-
-        return $parts === [] ? '' : implode('; ', $parts);
     }
 
     /**

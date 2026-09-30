@@ -114,6 +114,21 @@ class ExportDownloadTest extends TestCase
     }
 
     #[Test]
+    public function csv_export_downloads_with_csv_filename_extension(): void
+    {
+        $job = $this->makeSucceededJobWithFile([
+            'format' => ExportJob::FORMAT_CSV,
+            'file_path' => 'exports/default/'.str()->uuid().'.csv',
+        ]);
+
+        $url = URL::temporarySignedRoute('exports.download', now()->addMinutes(15), ['export' => $job->id]);
+        $response = $this->actingAs($this->admin)->get($url);
+
+        $response->assertOk();
+        $this->assertStringContainsString('.csv', (string) $response->headers->get('content-disposition'));
+    }
+
+    #[Test]
     public function job_not_yet_succeeded_returns_404(): void
     {
         $job = ExportJob::factory()->create([

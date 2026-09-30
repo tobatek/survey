@@ -187,6 +187,72 @@ class GenerateAnalyticsExportJobTest extends TestCase
     }
 
     #[Test]
+    public function csv_export_succeeds_and_writes_header_plus_rows(): void
+    {
+        $this->seedAnswers(2, 1);
+        $exportJob = ExportJob::factory()->create([
+            'tenant_id' => 'default',
+            'campaign_id' => $this->campaign->id,
+            'requested_by' => $this->requestedBy->id,
+            'format' => ExportJob::FORMAT_CSV,
+            'filter_json' => [],
+        ]);
+
+        $job = new GenerateAnalyticsExportJob($exportJob);
+        app()->call([$job, 'handle']);
+
+        $exportJob->refresh();
+        $this->assertSame(ExportJob::STATUS_SUCCEEDED, $exportJob->status);
+        $this->assertStringEndsWith('.csv', $exportJob->file_path);
+
+        $content = Storage::disk('local')->get($exportJob->file_path);
+        $this->assertStringStartsWith("\xEF\xBB\xBF", $content);
+
+        $lines = explode("\n", trim(substr($content, 3), "\r\n"));
+        $this->assertSame('Section,"Kode Pertanyaan","Teks Pertanyaan",Tipe,n,Ringkasan', trim($lines[0]));
+        $this->assertStringContainsString('Q1', $lines[1]);
+    }
+
+    #[Test]
+    public function csv_export_escapes_question_text_that_starts_with_formula_characters(): void
+    {
+        $snapshot = QuestionnaireSnapshot::factory()->create([
+            'structure_json' => [
+                'sections' => [[
+                    'code' => 'S1',
+                    'title' => 'Bagian 1',
+                    'questions' => [[
+                        'code' => 'QF', 'type' => 'single_choice', 'text' => '=SUM(A1:A9) berbahaya',
+                        'options' => [['code' => 'A', 'label' => 'A', 'is_positive' => false]],
+                        'matrix_rows' => [],
+                    ]],
+                ]],
+            ],
+        ]);
+        $campaign = Campaign::factory()->create(['tenant_id' => 'default', 'snapshot_id' => $snapshot->id, 'minimum_segment_size' => 1]);
+        $response = SurveyResponse::factory()->create(['campaign_id' => $campaign->id, 'snapshot_id' => $snapshot->id]);
+        $answer = Answer::factory()->create(['response_id' => $response->id, 'snapshot_question_code' => 'QF', 'text_value' => null]);
+        AnswerChoice::factory()->create(['answer_id' => $answer->id, 'option_code' => 'A']);
+
+        $exportJob = ExportJob::factory()->create([
+            'tenant_id' => 'default',
+            'campaign_id' => $campaign->id,
+            'requested_by' => $this->requestedBy->id,
+            'format' => ExportJob::FORMAT_CSV,
+            'filter_json' => [],
+        ]);
+
+        $job = new GenerateAnalyticsExportJob($exportJob);
+        app()->call([$job, 'handle']);
+
+        $exportJob->refresh();
+        $content = Storage::disk('local')->get($exportJob->file_path);
+
+        $this->assertStringContainsString("'=SUM(A1:A9) berbahaya", $content);
+        $this->assertStringNotContainsString(',=SUM(A1:A9) berbahaya,', $content);
+    }
+
+    #[Test]
     public function transient_failure_is_rethrown_so_queue_retry_applies(): void
     {
         $this->seedAnswers(1, 1);

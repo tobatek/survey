@@ -25,6 +25,8 @@ class ExportJob extends Model
 
     public const FORMAT_XLSX = 'xlsx';
 
+    public const FORMAT_CSV = 'csv';
+
     // TTL unduhan file setelah sukses (FSD §14.2 langkah 7 "signed download
     // URL berumur pendek" -- ini TTL file/row, bukan TTL link itu sendiri).
     public const DOWNLOAD_TTL_HOURS = 24;

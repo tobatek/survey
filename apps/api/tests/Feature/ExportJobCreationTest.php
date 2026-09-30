@@ -84,14 +84,30 @@ class ExportJobCreationTest extends TestCase
     }
 
     #[Test]
-    public function format_other_than_xlsx_is_rejected(): void
+    public function unsupported_format_is_rejected(): void
     {
+        // pdf/png belum diimplementasi (slice 6 bagian berikutnya) --
+        // xlsx dan csv sudah didukung sejak slice 5/6.
+        $response = $this->actingAs($this->admin)->postJson('/api/exports', [
+            'campaign_id' => $this->campaign->id,
+            'format' => 'pdf',
+        ]);
+
+        $response->assertStatus(422);
+    }
+
+    #[Test]
+    public function csv_format_is_accepted(): void
+    {
+        Queue::fake();
+
         $response = $this->actingAs($this->admin)->postJson('/api/exports', [
             'campaign_id' => $this->campaign->id,
             'format' => 'csv',
         ]);
 
-        $response->assertStatus(422);
+        $response->assertStatus(202);
+        $response->assertJsonPath('data.format', 'csv');
     }
 
     #[Test]

@@ -26,7 +26,7 @@ class ExportController extends Controller
     {
         $data = $request->validate([
             'campaign_id' => ['required', 'uuid', 'exists:campaigns,id'],
-            'format' => ['required', 'string', 'in:xlsx'],
+            'format' => ['required', 'string', 'in:xlsx,csv'],
             'include_comments' => ['sometimes', 'boolean'],
         ]);
 

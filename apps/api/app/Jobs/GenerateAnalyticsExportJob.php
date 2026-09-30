@@ -7,6 +7,7 @@ use App\Domains\Analytics\Actions\CampaignQuestionResultsAction;
 use App\Domains\Analytics\DTO\AnalyticsFilterDTO;
 use App\Domains\Analytics\Exceptions\ExportCampaignNotFoundException;
 use App\Domains\Analytics\Models\ExportJob;
+use App\Domains\Analytics\Support\AnalyticsCsvExportBuilder;
 use App\Domains\Analytics\Support\AnalyticsXlsxExportBuilder;
 use App\Domains\Campaigns\Models\Campaign;
 use Illuminate\Bus\Queueable;
@@ -49,7 +50,8 @@ class GenerateAnalyticsExportJob implements ShouldQueue
     public function handle(
         CampaignAnalyticsSummaryAction $summaryAction,
         CampaignQuestionResultsAction $questionsAction,
-        AnalyticsXlsxExportBuilder $builder,
+        AnalyticsXlsxExportBuilder $xlsxBuilder,
+        AnalyticsCsvExportBuilder $csvBuilder,
     ): void {
         $exportJob = $this->exportJob->fresh();
 
@@ -80,18 +82,22 @@ class GenerateAnalyticsExportJob implements ShouldQueue
 
         try {
             $filter = AnalyticsFilterDTO::fromArray($exportJob->filter_json ?? []);
-
-            $summary = $summaryAction->execute($campaign, $filter);
             $questions = $questionsAction->execute($campaign, $filter);
-            $questionnaireTitle = $campaign->questionnaire()->value('title') ?? 'Survei';
-
-            $spreadsheet = $builder->build($campaign, $questionnaireTitle, $exportJob->requestedBy, $filter, $summary, $questions);
 
             $directory = "exports/{$exportJob->tenant_id}/{$campaign->id}";
-            $filename = Str::uuid().'.xlsx';
+            $filename = Str::uuid().'.'.$exportJob->format;
             $tempPath = tempnam(sys_get_temp_dir(), 'export_');
 
-            (new Xlsx($spreadsheet))->save($tempPath);
+            if ($exportJob->format === ExportJob::FORMAT_CSV) {
+                // Dataset Question Results saja slice ini -- summary tidak
+                // dibutuhkan, hemat satu query yang tidak dipakai.
+                file_put_contents($tempPath, $csvBuilder->build($questions));
+            } else {
+                $summary = $summaryAction->execute($campaign, $filter);
+                $questionnaireTitle = $campaign->questionnaire()->value('title') ?? 'Survei';
+                $spreadsheet = $xlsxBuilder->build($campaign, $questionnaireTitle, $exportJob->requestedBy, $filter, $summary, $questions);
+                (new Xlsx($spreadsheet))->save($tempPath);
+            }
 
             Storage::disk('local')->putFileAs($directory, new File($tempPath), $filename);
 
