@@ -2,6 +2,7 @@
 
 namespace App\Domains\Campaigns\Models;
 
+use App\Domains\Analytics\Models\ExportJob;
 use App\Domains\Questionnaires\Models\Questionnaire;
 use App\Domains\Questionnaires\Models\QuestionnaireSnapshot;
 use App\Domains\Respondents\Models\SurveyResponse;
@@ -89,5 +90,10 @@ class Campaign extends Model
     public function responses(): HasMany
     {
         return $this->hasMany(SurveyResponse::class);
+    }
+
+    public function exportJobs(): HasMany
+    {
+        return $this->hasMany(ExportJob::class);
     }
 }

@@ -39,6 +39,41 @@ final readonly class AnalyticsFilterDTO
         );
     }
 
+    /**
+     * Bentuk array ternormalisasi (key terurut, array nilai di-sort) --
+     * dipakai CreateExportJobAction untuk filter_json/filter_hash, supaya
+     * filter yang secara logis sama selalu menghasilkan hash yang sama
+     * berapa pun urutan pengiriman field/nilai dari client.
+     *
+     * @return array<string, mixed>
+     */
+    public function normalized(): array
+    {
+        $data = [
+            'respondent_types' => $this->respondentTypes,
+            'faculty_names' => $this->facultyNames,
+            'program_study_codes' => $this->programStudyCodes,
+            'degree_levels' => $this->degreeLevels,
+            'cohort_years' => $this->cohortYears,
+            'work_unit_names' => $this->workUnitNames,
+            'employee_types' => $this->employeeTypes,
+            'submitted_from' => $this->submittedFrom,
+            'submitted_to' => $this->submittedTo,
+            'question_search' => $this->questionSearch,
+        ];
+
+        foreach ($data as $key => $value) {
+            if (is_array($value)) {
+                sort($value);
+                $data[$key] = $value;
+            }
+        }
+
+        ksort($data);
+
+        return $data;
+    }
+
     public function isEmpty(): bool
     {
         return $this->respondentTypes === null

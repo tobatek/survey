@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AnalyticsController;
 use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\EmployeeController;
+use App\Http\Controllers\Api\ExportController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\MatrixRowController;
 use App\Http\Controllers\Api\QuestionController;
@@ -78,7 +79,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/analytics/campaigns', [AnalyticsController::class, 'index']);
         Route::get('/analytics/campaigns/{campaign}/summary', [AnalyticsController::class, 'summary']);
         Route::get('/analytics/campaigns/{campaign}/questions', [AnalyticsController::class, 'questions']);
+
+        // Export async dasar (Fase 5 slice 5, FSD §14.2/§17.6) -- hanya
+        // xlsx sekarang, CSV/PDF/PNG slice 6. Download lewat rute terpisah
+        // di luar grup ini (butuh middleware `signed` tambahan, lihat bawah).
+        Route::post('/exports', [ExportController::class, 'store']);
+        Route::get('/exports/{export}', [ExportController::class, 'show']);
     });
+
+    // Signed route terpisah dari grup adminViewerRoles di atas supaya
+    // middleware `signed` (validasi HMAC+expiry query string) berjalan
+    // BERSAMA middleware role -- bukan pengganti otorisasi Gate, tapi
+    // lapisan tambahan (FSD §21.2 "otorisasi diperiksa sebelum download"
+    // sebagai poin terpisah dari sekadar signed URL).
+    Route::middleware([$adminViewerRoles, 'signed'])
+        ->get('/exports/{export}/download', [ExportController::class, 'download'])
+        ->name('exports.download');
 
     Route::middleware('role:lpm_admin,survey_operator')->group(function () {
         Route::post('/questionnaires', [QuestionnaireController::class, 'store']);

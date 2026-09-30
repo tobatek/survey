@@ -40,3 +40,10 @@ Schedule::command('responses:expire-stale-sessions')->hourly()->withoutOverlappi
 // (now()->addDay() saat submit sukses), dibersihkan tiap jam sama seperti
 // template-imports:prune-expired.
 Schedule::command('idempotency-keys:prune-expired')->hourly()->withoutOverlapping();
+
+// FSD §14.2 langkah 8 — file export privat & job row dibersihkan setelah
+// expires_at lewat; hard-delete (bukan soft/expired-state) mengikuti pola
+// template-imports:prune-expired -- lihat catatan scope-decision di
+// App\Console\Commands\PruneExpiredExports kalau kebutuhan audit trail
+// export muncul nanti.
+Schedule::command('exports:prune-expired')->hourly()->withoutOverlapping();
