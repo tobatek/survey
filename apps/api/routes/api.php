@@ -44,6 +44,12 @@ Route::post('/responses/{session}/submit', [ResponseController::class, 'submit']
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [SsoController::class, 'me']);
 
+    // FSD §23.2 "deep dependency health hanya untuk admin/monitor" (Fase 6
+    // paket E) -- digerbang technical_admin saja (role operasional/monitor
+    // FSD §5.2), bukan digabung $adminViewerRoles di bawah (itu role
+    // produk/survei, bukan role monitoring infrastruktur).
+    Route::middleware('role:technical_admin')->get('/health/deep', [HealthController::class, 'deep']);
+
     // FSD §11 jalur identified -- boleh diakses siapa saja yang login,
     // bukan cuma role admin (dipakai mahasiswa/pegawai biasa).
     Route::get('/me/surveys', [RespondentSurveyController::class, 'mySurveys']);
