@@ -77,11 +77,14 @@ class HealthController extends Controller
             Redis::connection()->ping();
             $pingMs = round((microtime(true) - $start) * 1000, 1);
             $info = Redis::connection()->info('memory');
+            // phpredis mengelompokkan hasil INFO per section ("Memory" =>
+            // [...]) sementara predis mengembalikan flat -- dukung dua-duanya.
+            $memory = $info['Memory'] ?? $info;
 
             return [
                 'connected' => true,
                 'ping_ms' => $pingMs,
-                'used_memory_human' => $info['used_memory_human'] ?? null,
+                'used_memory_human' => $memory['used_memory_human'] ?? null,
             ];
         } catch (\Throwable $e) {
             return ['connected' => false, 'error' => class_basename($e)];
