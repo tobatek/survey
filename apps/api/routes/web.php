@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Route;
 // myAMETA Survey tidak memiliki halaman login sendiri di sini; /auth/redirect
 // langsung membawa browser ke Portal.
 Route::get('/auth/redirect', [SsoController::class, 'redirect'])->name('auth.redirect');
-Route::get('/auth/callback', [SsoController::class, 'callback'])->name('auth.callback');
+Route::get('/auth/callback', [SsoController::class, 'callback'])->middleware('throttle:sso')->name('auth.callback');
 Route::post('/logout', [SsoController::class, 'logout'])->name('auth.logout');
 
 // Bypass Portal SSO untuk dev lokal saja — TIDAK pernah terdaftar di

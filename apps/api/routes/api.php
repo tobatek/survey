@@ -22,17 +22,24 @@ use Illuminate\Support\Facades\Route;
 Route::get('/health/ready', [HealthController::class, 'ready']);
 
 // FSD §11 jalur anonymous -- link token undangan, tidak pernah login.
-Route::post('/my-surveys/start-by-token', [RespondentSurveyController::class, 'startByToken']);
+// `throttle:start-by-token` (Fase 6 paket A) -- endpoint ini menghash token
+// input lalu mencocokkan ke eligibility, target alami tebak-tebak token
+// kalau tidak dibatasi per IP.
+Route::post('/my-surveys/start-by-token', [RespondentSurveyController::class, 'startByToken'])
+    ->middleware('throttle:start-by-token');
 
 // FSD §11.2/§11.3/§11.4/§17.2 -- draft, autosave & submit (Fase 4 slice 3-4).
 // Sengaja di luar grup auth:sanctum supaya mode anonymous (tanpa login)
 // tetap bisa akses; otorisasi mode identified dicek manual di controller
 // (lihat Concerns\HandlesDraftLock) karena statefulApi() tetap mengisi
 // Auth::user() dari cookie sesi walau route ini tidak diproteksi middleware
-// auth:sanctum.
+// auth:sanctum. `throttle:submit` (Fase 6 paket A) di submit saja -- draft
+// autosave dipanggil jauh lebih sering oleh alur normal (tiap beberapa
+// detik), membatasinya berisiko mengganggu penggunaan wajar.
 Route::get('/responses/{session}', [ResponseController::class, 'show']);
 Route::put('/responses/{session}/draft', [ResponseController::class, 'saveDraft']);
-Route::post('/responses/{session}/submit', [ResponseController::class, 'submit']);
+Route::post('/responses/{session}/submit', [ResponseController::class, 'submit'])
+    ->middleware('throttle:submit');
 
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', [SsoController::class, 'me']);
@@ -83,7 +90,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Export async dasar (Fase 5 slice 5, FSD §14.2/§17.6) -- hanya
         // xlsx sekarang, CSV/PDF/PNG slice 6. Download lewat rute terpisah
         // di luar grup ini (butuh middleware `signed` tambahan, lihat bawah).
-        Route::post('/exports', [ExportController::class, 'store']);
+        Route::post('/exports', [ExportController::class, 'store'])->middleware('throttle:exports');
         Route::get('/exports/{export}', [ExportController::class, 'show']);
     });
 
