@@ -51,6 +51,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/analytics/:campaignId',
+      name: 'analytics.detail',
+      component: () => import('@/features/analytics/AnalyticsDetailPage.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/settings/templates',
       name: 'settings.templates',
       component: () => import('@/features/settings/TemplateImportPage.vue'),

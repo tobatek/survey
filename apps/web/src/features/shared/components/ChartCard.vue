@@ -9,6 +9,13 @@ defineProps<{
   n: number
   filterSummary?: string
   refreshedAt?: string
+  /**
+   * Fase 5 slice 7 -- backend PNG export HANYA chart funnel campaign-wide
+   * (tidak ada per-pertanyaan). Set true untuk ChartCard per-pertanyaan
+   * supaya tombol "Unduh PNG" (yang tidak punya backing endpoint di sana)
+   * tidak ditampilkan.
+   */
+  hidePngExport?: boolean
 }>()
 
 const emit = defineEmits<{ exportPng: [] }>()
@@ -27,6 +34,7 @@ const emit = defineEmits<{ exportPng: [] }>()
         </p>
       </div>
       <button
+        v-if="!hidePngExport"
         type="button"
         class="shrink-0 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
         @click="emit('exportPng')"
