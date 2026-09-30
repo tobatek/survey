@@ -47,3 +47,8 @@ Schedule::command('idempotency-keys:prune-expired')->hourly()->withoutOverlappin
 // App\Console\Commands\PruneExpiredExports kalau kebutuhan audit trail
 // export muncul nanti.
 Schedule::command('exports:prune-expired')->hourly()->withoutOverlapping();
+
+// FSD §24 "PostgreSQL backup harian" (Fase 6 paket G). Dini hari (beban
+// terendah), sebelum sync roster 02:00/02:15 supaya tidak tumpang tindih
+// I/O berat di jendela yang sama.
+Schedule::command('backup:database')->dailyAt('01:30')->withoutOverlapping();
