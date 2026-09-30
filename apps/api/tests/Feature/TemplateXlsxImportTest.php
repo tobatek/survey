@@ -160,11 +160,31 @@ class TemplateXlsxImportTest extends TestCase
     }
 
     #[Test]
-    public function xlsx_corrupt_file_is_rejected_gracefully(): void
+    public function xlsx_with_wrong_zip_signature_is_rejected_at_signature_check(): void
     {
+        // Fase 6 paket C -- konten yang bahkan bukan arsip ZIP ditolak SEBELUM
+        // sampai ke parser PhpSpreadsheet (lihat ValidateTemplateImportAction).
         $response = $this->actingAs($this->admin)->postJson('/api/settings/template-imports', [
             'filename' => 'corrupt.xlsx',
             'content' => base64_encode('bukan file xlsx sungguhan'),
+            'format' => 'xlsx',
+        ]);
+
+        $response->assertCreated();
+        $response->assertJsonPath('data.status', 'failed');
+        $codes = collect($response->json('data.errors'))->pluck('code');
+        $this->assertContains('invalid_xlsx_signature', $codes);
+    }
+
+    #[Test]
+    public function xlsx_with_valid_zip_signature_but_corrupt_workbook_is_rejected_gracefully(): void
+    {
+        // Signature ZIP valid (PK\x03\x04) tapi bukan struktur xlsx yang
+        // benar -- signature check saja tidak cukup, parser sendiri harus
+        // tetap menangani ini dengan baik (bukan exception tak tertangani).
+        $response = $this->actingAs($this->admin)->postJson('/api/settings/template-imports', [
+            'filename' => 'corrupt.xlsx',
+            'content' => base64_encode("PK\x03\x04bukan struktur zip xlsx yang benar"),
             'format' => 'xlsx',
         ]);
 

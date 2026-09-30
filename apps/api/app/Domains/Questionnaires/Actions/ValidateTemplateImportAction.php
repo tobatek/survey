@@ -42,6 +42,18 @@ class ValidateTemplateImportAction
                 ], [], $content, $actor);
             }
 
+            // Fase 6 paket C (FSD §21.2 "secure file validation") -- cek
+            // signature biner ZIP (xlsx adalah arsip ZIP) SEBELUM diserahkan
+            // ke parser PhpSpreadsheet, supaya payload yang bukan xlsx
+            // sungguhan (walau lolos base64) ditolak dengan error jelas di
+            // sini, bukan gagal di tengah parsing dengan pesan yang kurang
+            // jelas asalnya.
+            if (! str_starts_with($decoded, "PK\x03\x04")) {
+                return $this->stage(TemplateImport::STATUS_FAILED, $tenantId, $filename, [], [
+                    ['code' => 'invalid_xlsx_signature', 'message' => 'File bukan XLSX yang valid (signature ZIP tidak cocok).', 'path' => 'file'],
+                ], [], $content, $actor);
+            }
+
             $parsed = $this->xlsxParser->parse($decoded);
 
             if ($parsed['payload'] === null) {
