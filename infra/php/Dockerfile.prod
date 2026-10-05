@@ -1,0 +1,72 @@
+# Image production untuk apps/api (Laravel) -- dipakai di Dokploy.
+# Beda dari infra/php/Dockerfile (dev, bind-mount source dari host, Nginx
+# jadi container terpisah): image ini SATU container berisi Nginx + PHP-FPM
+# sekaligus (lewat supervisord), self-contained, tidak butuh volume apa pun
+# dari host, dan tidak perlu share filesystem lintas-container cuma untuk
+# nginx bisa baca public/.
+#
+# Build context HARUS root repo. Contoh:
+#   docker build -f infra/php/Dockerfile.prod -t myameta-api .
+
+# --- Stage 1: install dependency PHP (composer) ---
+FROM composer:2 AS vendor
+
+WORKDIR /app
+
+COPY apps/api/composer.json apps/api/composer.lock ./
+
+RUN composer install \
+        --no-dev \
+        --no-interaction \
+        --no-ansi \
+        --no-scripts \
+        --no-autoloader \
+        --prefer-dist
+
+COPY apps/api/. .
+
+RUN composer dump-autoload --optimize --no-dev --no-interaction
+
+# --- Stage 2: runtime Nginx + PHP-FPM ---
+FROM php:8.3-fpm-alpine AS runtime
+
+RUN apk add --no-cache \
+        nginx \
+        supervisor \
+        postgresql-dev \
+        icu-dev \
+        libzip-dev \
+        libsodium-dev \
+        oniguruma-dev \
+    && docker-php-ext-install \
+        pdo_pgsql \
+        pgsql \
+        intl \
+        zip \
+        sodium \
+        bcmath \
+        opcache
+
+COPY infra/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+COPY infra/nginx/api.prod.conf /etc/nginx/http.d/default.conf
+COPY infra/php/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+WORKDIR /var/www/html
+
+COPY --from=vendor /app /var/www/html
+
+# www-data (uid 82) bawaan image php-alpine -- storage & bootstrap/cache
+# harus writable oleh PHP-FPM (log, cache compiled view, session file
+# fallback, dll). Nginx jalan sebagai root (butuh bind port 80) tapi
+# php-fpm pool tetap jalan sebagai www-data (lihat www.conf bawaan image).
+RUN chown -R www-data:www-data storage bootstrap/cache \
+    && chmod -R 775 storage bootstrap/cache \
+    && mkdir -p /run/nginx
+
+COPY infra/php/entrypoint.prod.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
+
+EXPOSE 80
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf", "-n"]

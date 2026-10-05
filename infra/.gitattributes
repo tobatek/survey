@@ -1,0 +1,5 @@
+# Shell script harus selalu LF -- CRLF bikin "/bin/sh^M: bad interpreter"
+# saat dijalankan di container Linux (Alpine).
+*.sh text eol=lf
+Dockerfile* text eol=lf
+*.conf text eol=lf

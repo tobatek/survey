@@ -1,0 +1,64 @@
+# Docker Compose PRODUCTION untuk Dokploy. Beda dari infra/docker-compose.yml
+# (dev, bind-mount source dari host, Nginx+PHP-FPM container terpisah):
+# di sini "api" sudah satu container isi Nginx+PHP-FPM (lihat
+# infra/php/Dockerfile.prod), self-contained, tidak ada bind-mount source.
+#
+# Postgres & Redis SENGAJA TIDAK dimasukkan ke compose ini -- pakai fitur
+# "Database" bawaan Dokploy untuk keduanya (Dokploy yang urus volume, backup,
+# resource limit, monitoring-nya). Compose ini cuma berisi service yang
+# memang bagian dari aplikasi: API (Nginx+PHP-FPM), worker queue, scheduler,
+# dan web SPA. Isi DB_HOST/REDIS_HOST di environment variable Dokploy dengan
+# connection string/host dari database yang dibuat di sana.
+#
+# Semua env var runtime (DB_*, REDIS_*, APP_KEY, SSO_*, MAIL_*, dst -- lihat
+# apps/api/.env.production.example) di-set lewat panel Environment di
+# Dokploy, BUKAN di-commit ke file ini.
+#
+# Build context tiap service = root repo (bukan apps/api/apps/web) -- lihat
+# komentar di masing-masing Dockerfile.prod kenapa.
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/php/Dockerfile.prod
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web/Dockerfile.prod
+      args:
+        # WAJIB diisi ke domain publik API sesungguhnya sebelum build --
+        # dibakar ke bundle JS, tidak bisa diganti lagi sesudah image jadi.
+        VITE_API_ORIGIN: "${VITE_API_ORIGIN}"
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL}"
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+
+  queue:
+    build:
+      context: ..
+      dockerfile: infra/php/Dockerfile.prod
+    restart: unless-stopped
+    command: php artisan queue:work --tries=3 --backoff=5 --sleep=1 --max-time=3600
+    depends_on:
+      - api
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: infra/php/Dockerfile.prod
+    restart: unless-stopped
+    command: sh -c "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
+    depends_on:
+      - api
