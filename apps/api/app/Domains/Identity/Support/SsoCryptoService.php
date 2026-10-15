@@ -9,22 +9,18 @@ use RuntimeException;
 // (myAMETA Survey) untuk bicara ke /api/sso/verify dan /api/sso/session-status
 // milik Portal.
 //
-// Kunci AES = HKDF-Expand(sha256(app_token), 32 bytes, info="sso-verify-v1").
-// App Luar menurunkan kunci dari TOKEN MENTAHnya sendiri (bukan dari hash
-// yang dikirim Portal — App Luar tidak pernah menerima hash itu).
+// Kunci AES = hash_hkdf('sha256', <sha256(app_token) dalam HEX>, 32, "sso-verify-v1").
+// Bahan kunci (IKM) adalah string hex 64 karakter dari sha256(token), BUKAN
+// 32 byte biner mentahnya — sama dengan yang dipakai Portal (Portal menyimpan
+// token_hash hex di DB dan memakai string itu sebagai IKM). App Luar
+// menghitung hash yang sama dari TOKEN MENTAHnya sendiri. Rumus ini dikunci
+// oleh SsoCryptoServiceTest::it_derives_the_key_from_the_hex_sha256_of_the_token.
 //
 // Auth tag GCM berfungsi ganda sebagai signature: tag tidak cocok berarti
 // payload dipalsukan/rusak atau kuncinya salah.
 //
-// PENTING — belum diverifikasi byte-for-byte: dokumen 15 menyebut file
-// referensi `apps/api/app/Services/SsoCryptoService.php` di repo Portal
-// (`apps_validasi_data_pddikti`), yang tidak tersedia di repo ini untuk
-// dibandingkan langsung. Implementasi di bawah mengikuti bacaan paling
-// literal dari deskripsi ("HKDF-Expand" dipanggil di atas hash SHA-256 dari
-// app_token, via `hash_hkdf()` PHP bawaan — yang sebenarnya melakukan
-// Extract+Expand penuh, bukan Expand-only). WAJIB divalidasi terhadap kode
-// Portal sungguhan (uji round-trip lintas repo) sebelum dipakai produksi —
-// lihat exit criteria Fase 1 di docs/16_PLAN_FULLSTACK_LARAVEL_MYAMETA_SURVEY.md.
+// Catatan: `hash_hkdf()` PHP melakukan Extract+Expand penuh. Nonce 12 byte,
+// base64, dan tag terpisah sudah sesuai kontrak Portal.
 class SsoCryptoService
 {
     private const HKDF_INFO = 'sso-verify-v1';
@@ -108,6 +104,6 @@ class SsoCryptoService
 
     private function deriveKey(): string
     {
-        return hash_hkdf('sha256', hash('sha256', $this->appToken, binary: true), 32, self::HKDF_INFO);
+        return hash_hkdf('sha256', hash('sha256', $this->appToken), 32, self::HKDF_INFO);
     }
 }
