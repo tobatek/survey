@@ -7,6 +7,10 @@
 return [
     'portal_base_url' => env('SSO_PORTAL_BASE_URL'),
 
+    // Halaman /sso/authorize adalah halaman SPA Portal (browser), bisa beda host
+    // dari API Portal di atas. Kosong = pakai portal_base_url.
+    'portal_frontend_url' => env('SSO_PORTAL_FRONTEND_URL'),
+
     'client_id' => env('SSO_APP_CLIENT_ID'),
 
     // Token aplikasi yang didapat sekali dari halaman admin Portal

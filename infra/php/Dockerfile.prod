@@ -55,6 +55,7 @@ RUN apk add --no-cache \
         opcache
 
 COPY infra/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+COPY infra/php/fpm-logging.conf /usr/local/etc/php-fpm.d/zz-logging.conf
 COPY infra/nginx/api.prod.conf /etc/nginx/http.d/default.conf
 COPY infra/php/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
