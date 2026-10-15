@@ -8,6 +8,7 @@
 import { ref } from 'vue'
 import { useAuthStore } from '@/features/auth/store/auth'
 import { useBrandingStore } from '@/features/branding/store/branding'
+import { useToast } from '@/features/shared/useToast'
 
 export type NavIcon = 'clipboard' | 'academic-cap' | 'briefcase' | 'chart-bar' | 'cog'
 
@@ -26,6 +27,15 @@ defineProps<{
 const sidebarOpen = ref(false)
 const auth = useAuthStore()
 const branding = useBrandingStore()
+const { push } = useToast()
+
+async function onLogout() {
+  try {
+    await auth.logout()
+  } catch (e) {
+    push(e instanceof Error ? e.message : 'Gagal keluar.', 'error')
+  }
+}
 
 // Path SVG outline per ikon menu (gaya konsisten dengan ikon lain di app:
 // stroke-width 2, viewBox 24). Dipakai di rail sidebar desktop (collapsed).
@@ -135,7 +145,7 @@ const NAV_ICON_PATHS: Record<NavIcon, string> = {
           <button
             type="button"
             class="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
-            @click="auth.logout()"
+            @click="onLogout()"
           >
             Keluar
           </button>

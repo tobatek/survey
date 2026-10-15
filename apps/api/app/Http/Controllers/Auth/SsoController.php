@@ -10,6 +10,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -109,7 +110,7 @@ class SsoController extends Controller
         return redirect()->away(config('services.spa.url'));
     }
 
-    public function logout(Request $request, RecordAuditEventAction $recordAuditEvent): RedirectResponse
+    public function logout(Request $request, RecordAuditEventAction $recordAuditEvent): RedirectResponse|Response
     {
         $user = $request->user();
 
@@ -119,6 +120,12 @@ class SsoController extends Controller
 
         if ($user !== null) {
             $recordAuditEvent->execute(action: 'logout', result: 'success', actor: $user);
+        }
+
+        // SPA memanggil lewat fetch lintas-origin: balasan redirect ke host SPA
+        // akan ditolak browser (CORS), jadi cukup 204 dan SPA yang berpindah halaman.
+        if ($request->expectsJson()) {
+            return response()->noContent();
         }
 
         return redirect()->away(config('services.spa.url'));

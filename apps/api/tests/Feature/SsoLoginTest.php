@@ -163,4 +163,14 @@ class SsoLoginTest extends TestCase
     {
         return (new SsoCryptoService('test-app-token'))->encrypt($identity);
     }
+
+    #[Test]
+    public function json_logout_returns_204_and_ends_the_session(): void
+    {
+        $user = User::factory()->create(['tenant_id' => 'default']);
+
+        $this->actingAs($user)->postJson('/logout')->assertNoContent();
+
+        $this->assertGuest('web');
+    }
 }

@@ -79,11 +79,20 @@ export const useAuthStore = defineStore('auth', {
       await fetch(`${apiOrigin}/sanctum/csrf-cookie`, { credentials: 'include' })
       const xsrfToken = document.cookie.match(/(?:^|; )XSRF-TOKEN=([^;]*)/)?.[1]
 
-      await fetch(`${apiOrigin}/logout`, {
+      const response = await fetch(`${apiOrigin}/logout`, {
         method: 'POST',
         credentials: 'include',
-        headers: xsrfToken ? { 'X-XSRF-TOKEN': decodeURIComponent(xsrfToken) } : {},
+        headers: {
+          Accept: 'application/json',
+          ...(xsrfToken ? { 'X-XSRF-TOKEN': decodeURIComponent(xsrfToken) } : {}),
+        },
       }).catch(() => null)
+
+      // Jangan pura-pura sukses: kalau sesi server tidak terhapus, pindah ke
+      // /login hanya akan memantulkan user kembali masuk.
+      if (!response || !response.ok) {
+        throw new Error('Gagal keluar. Silakan coba lagi.')
+      }
 
       this.user = null
       window.location.href = '/login'
