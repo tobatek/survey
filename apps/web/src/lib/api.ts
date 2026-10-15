@@ -17,8 +17,14 @@ export class ApiError extends Error {
   }
 }
 
+// Origin API dipakai untuk /sanctum/csrf-cookie (di luar prefix /api). Di
+// produksi SPA & API beda host (VITE_API_BASE_URL absolut), jadi path relatif
+// akan nyasar ke Nginx SPA. Di dev, API_BASE relatif ('/api') -> origin kosong
+// supaya tetap lewat proxy Vite.
+const API_ORIGIN = /^https?:\/\//.test(API_BASE) ? new URL(API_BASE).origin : ''
+
 async function ensureCsrfCookie(): Promise<void> {
-  await fetch('/sanctum/csrf-cookie', { credentials: 'include' })
+  await fetch(`${API_ORIGIN}/sanctum/csrf-cookie`, { credentials: 'include' })
 }
 
 function readCookie(name: string): string | null {
