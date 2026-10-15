@@ -9,17 +9,19 @@ export default {
       colors: {
         // Palet netral + satu aksen brand, terinspirasi karirlink.id
         // (functional minimalism: abu-abu netral untuk struktur, aksen untuk CTA).
+        // Dibaca dari variabel CSS --brand-* (default di style.css) supaya warna
+        // utama bisa diganti admin lewat Pengaturan > Tampilan tanpa rebuild.
         brand: {
-          50: '#eef4ff',
-          100: '#d9e6ff',
-          200: '#b8d1ff',
-          300: '#8bb3ff',
-          400: '#5c8dff',
-          500: '#3466f6',
-          600: '#254bdb',
-          700: '#1f3bb0',
-          800: '#20348c',
-          900: '#1e2f6f',
+          50: 'rgb(var(--brand-50) / <alpha-value>)',
+          100: 'rgb(var(--brand-100) / <alpha-value>)',
+          200: 'rgb(var(--brand-200) / <alpha-value>)',
+          300: 'rgb(var(--brand-300) / <alpha-value>)',
+          400: 'rgb(var(--brand-400) / <alpha-value>)',
+          500: 'rgb(var(--brand-500) / <alpha-value>)',
+          600: 'rgb(var(--brand-600) / <alpha-value>)',
+          700: 'rgb(var(--brand-700) / <alpha-value>)',
+          800: 'rgb(var(--brand-800) / <alpha-value>)',
+          900: 'rgb(var(--brand-900) / <alpha-value>)',
         },
         // Mapping warna badge status kuesioner/campaign — konsisten lintas modul
         // (FSD §7.6 state machine): draft/ready/active/paused/closed.

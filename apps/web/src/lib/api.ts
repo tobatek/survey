@@ -40,13 +40,16 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   const xsrfToken = readCookie('XSRF-TOKEN')
+  // FormData (upload file) harus dikirim tanpa Content-Type manual supaya
+  // browser mengisi boundary multipart sendiri.
+  const isFormData = options.body instanceof FormData
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
       ...options.headers,
     },

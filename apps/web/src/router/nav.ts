@@ -7,4 +7,5 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Data Pegawai', to: '/employees', icon: 'briefcase' },
   { label: 'Hasil Analisa Kuesioner', to: '/analytics', icon: 'chart-bar' },
   { label: 'Pengaturan', to: '/settings/templates', icon: 'cog' },
+  { label: 'Tampilan & Logo', to: '/settings/branding', icon: 'cog' },
 ]

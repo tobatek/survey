@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import ToastNotification from '@/features/shared/components/ToastNotification.vue'
 import { useToast } from '@/features/shared/useToast'
+import { useBrandingStore } from '@/features/branding/store/branding'
+import { onMounted } from 'vue'
 
 const { toasts, dismiss } = useToast()
+const branding = useBrandingStore()
+
+onMounted(() => {
+  branding.load()
+})
 </script>
 
 <template>
