@@ -1,0 +1,12 @@
+.git
+.github
+docs
+apps/api
+infra/php
+infra/nginx
+apps/web/node_modules
+apps/web/dist
+apps/web/.env
+apps/web/.env.*
+!apps/web/.env.example
+!apps/web/.env.production.example

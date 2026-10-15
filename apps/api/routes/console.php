@@ -1,0 +1,54 @@
+<?php
+
+use App\Jobs\SyncEmployeesJob;
+use App\Jobs\SyncStudentsJob;
+use Illuminate\Foundation\Inspiring;
+use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Schedule;
+
+Artisan::command('inspire', function () {
+    $this->comment(Inspiring::quote());
+})->purpose('Display an inspiring quote');
+
+// FSD §18.3 "roster incremental sync: harian/jam tertentu". withoutOverlapping
+// tambahan di sini adalah pengaman kedua di atas WithoutOverlapping milik job
+// itu sendiri (App\Jobs\SyncStudentsJob/SyncEmployeesJob).
+Schedule::job(new SyncStudentsJob('scheduled'))->dailyAt('02:00')->withoutOverlapping();
+Schedule::job(new SyncEmployeesJob('scheduled'))->dailyAt('02:15')->withoutOverlapping();
+
+// FSD §15.4 — staging template_imports expired (TTL 1 jam, lihat
+// ValidateTemplateImportAction) dibersihkan tiap jam.
+Schedule::command('template-imports:prune-expired')->hourly()->withoutOverlapping();
+
+// FSD §10.4/§18.3 — aktivasi & penutupan campaign otomatis berdasar
+// starts_at/ends_at, dicek tiap menit (atomic lock ada di dalam
+// ActivateCampaignAction/TransitionCampaignStatusAction sendiri per
+// campaign; withoutOverlapping di sini cuma cegah dua proses command yang
+// sama berjalan bersamaan).
+Schedule::command('campaigns:activate-due')->everyMinute()->withoutOverlapping();
+Schedule::command('campaigns:close-expired')->everyMinute()->withoutOverlapping();
+
+// FSD §10.5 — reminder, jarak minimal & jam tenang dicek di dalam action
+// tiap kali command ini jalan, jadi aman dijadwalkan tiap jam.
+Schedule::command('campaigns:send-reminders')->hourly()->withoutOverlapping();
+
+// Fase 4 slice 6 — TTL sesi draft harian (ResponseSession::DRAFT_TTL_DAYS),
+// tidak perlu presisi menit seperti campaign start/end, jadi cukup tiap jam.
+Schedule::command('responses:expire-stale-sessions')->hourly()->withoutOverlapping();
+
+// Fase 4 slice 6 — idempotency_keys.expires_at diisi SubmitResponseAction
+// (now()->addDay() saat submit sukses), dibersihkan tiap jam sama seperti
+// template-imports:prune-expired.
+Schedule::command('idempotency-keys:prune-expired')->hourly()->withoutOverlapping();
+
+// FSD §14.2 langkah 8 — file export privat & job row dibersihkan setelah
+// expires_at lewat; hard-delete (bukan soft/expired-state) mengikuti pola
+// template-imports:prune-expired -- lihat catatan scope-decision di
+// App\Console\Commands\PruneExpiredExports kalau kebutuhan audit trail
+// export muncul nanti.
+Schedule::command('exports:prune-expired')->hourly()->withoutOverlapping();
+
+// FSD §24 "PostgreSQL backup harian" (Fase 6 paket G). Dini hari (beban
+// terendah), sebelum sync roster 02:00/02:15 supaya tidak tumpang tindih
+// I/O berat di jendela yang sama.
+Schedule::command('backup:database')->dailyAt('01:30')->withoutOverlapping();

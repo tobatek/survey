@@ -1,0 +1,37 @@
+# Image production untuk apps/web (Vue SPA) -- dipakai di Dokploy.
+# Beda dari service "web" di infra/docker-compose.yml (dev, menjalankan
+# `npm run dev` / Vite dev server): image ini build jadi static asset
+# (`npm run build`) lalu diserve Nginx. Vite "membakar" VITE_* ke dalam
+# bundle JS saat build -- makanya dua URL backend ini harus lewat build-arg,
+# tidak bisa diganti lagi sesudah image jadi (ganti URL = build ulang image).
+#
+# Build context HARUS root repo. Contoh:
+#   docker build -f infra/web/Dockerfile.prod \
+#     --build-arg VITE_API_ORIGIN=https://api.example.ac.id \
+#     --build-arg VITE_API_BASE_URL=https://api.example.ac.id/api \
+#     -t myameta-web .
+
+# --- Stage 1: build static asset ---
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY apps/web/package.json apps/web/package-lock.json ./
+RUN npm ci
+
+COPY apps/web/. .
+
+ARG VITE_API_ORIGIN
+ARG VITE_API_BASE_URL
+ENV VITE_API_ORIGIN=${VITE_API_ORIGIN}
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+
+RUN npm run build
+
+# --- Stage 2: serve lewat Nginx ---
+FROM nginx:1.27-alpine AS runtime
+
+COPY infra/web/nginx.prod.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /app/dist /usr/share/nginx/html
+
+EXPOSE 80

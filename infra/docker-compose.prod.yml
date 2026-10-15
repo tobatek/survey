@@ -1,0 +1,196 @@
+# Docker Compose PRODUCTION untuk Dokploy -- SATU compose berisi SEMUA
+# container: postgres, redis, migrate (one-shot), api, queue, scheduler, web.
+# Tidak perlu membuat resource Database terpisah di Dokploy.
+#
+# Beda dari infra/docker-compose.yml (dev, bind-mount source dari host):
+# "api" di sini satu container berisi Nginx+PHP-FPM (infra/php/Dockerfile.prod),
+# self-contained, tanpa bind-mount source.
+#
+# Semua nilai di bawah di-set lewat panel Environment Dokploy (tab Environment
+# pada Compose ini). Daftar lengkap & contoh: apps/api/.env.production.example
+# dan docs/25_DEPLOYMENT_DOKPLOY.md. Variabel bertanda ":?" WAJIB diisi --
+# deploy gagal dengan pesan jelas kalau kosong.
+#
+# Host DB & Redis sudah fixed ke nama service (postgres / redis) di jaringan
+# internal compose, jadi TIDAK perlu (dan tidak dipakai) DB_HOST/REDIS_HOST dari
+# env. Postgres & Redis tidak dibuka ke publik (tanpa ports).
+#
+# Domain di Dokploy: tab Domains -> service "api" port 80, service "web" port 80.
+# Jangan pakai "ports:" host-binding (bentrok dengan Traefik/aplikasi lain).
+
+x-api-build: &api-build
+  context: ..
+  dockerfile: infra/php/Dockerfile.prod
+
+x-app-env: &app-env
+  APP_NAME: "${APP_NAME:-myAMETA Survey}"
+  APP_ENV: "production"
+  APP_KEY: "${APP_KEY:?isi APP_KEY (php artisan key:generate --show)}"
+  APP_DEBUG: "false"
+  APP_URL: "${APP_URL:?isi APP_URL (domain publik API)}"
+  APP_LOCALE: "${APP_LOCALE:-id}"
+  APP_FALLBACK_LOCALE: "${APP_FALLBACK_LOCALE:-id}"
+  BCRYPT_ROUNDS: "${BCRYPT_ROUNDS:-12}"
+  LOG_CHANNEL: "${LOG_CHANNEL:-stderr}"
+  LOG_LEVEL: "${LOG_LEVEL:-warning}"
+
+  DB_CONNECTION: "pgsql"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  DB_DATABASE: "${DB_DATABASE:-myameta_survey}"
+  DB_USERNAME: "${DB_USERNAME:-myameta}"
+  DB_PASSWORD: "${DB_PASSWORD:?isi DB_PASSWORD}"
+
+  REDIS_CLIENT: "predis"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: "${REDIS_PASSWORD:?isi REDIS_PASSWORD}"
+
+  SESSION_DRIVER: "redis"
+  SESSION_LIFETIME: "${SESSION_LIFETIME:-120}"
+  SESSION_ENCRYPT: "false"
+  SESSION_PATH: "/"
+  SESSION_DOMAIN: "${SESSION_DOMAIN:-null}"
+  SESSION_SECURE_COOKIE: "${SESSION_SECURE_COOKIE:-true}"
+  SESSION_SAME_SITE: "${SESSION_SAME_SITE:-strict}"
+  QUEUE_CONNECTION: "redis"
+  CACHE_STORE: "redis"
+  CACHE_PREFIX: "${CACHE_PREFIX:-myameta_cache}"
+  FILESYSTEM_DISK: "local"
+
+  MAIL_MAILER: "${MAIL_MAILER:-log}"
+  MAIL_SCHEME: "${MAIL_SCHEME:-smtps}"
+  MAIL_HOST: "${MAIL_HOST:-}"
+  MAIL_PORT: "${MAIL_PORT:-465}"
+  MAIL_USERNAME: "${MAIL_USERNAME:-}"
+  MAIL_PASSWORD: "${MAIL_PASSWORD:-}"
+  MAIL_FROM_ADDRESS: "${MAIL_FROM_ADDRESS:-noreply@myameta-survey.example}"
+  MAIL_FROM_NAME: "${MAIL_FROM_NAME:-myAMETA Survey}"
+
+  SSO_PORTAL_BASE_URL: "${SSO_PORTAL_BASE_URL:-}"
+  SSO_APP_CLIENT_ID: "${SSO_APP_CLIENT_ID:-}"
+  SSO_APP_TOKEN: "${SSO_APP_TOKEN:-}"
+  SSO_REDIRECT_URI: "${SSO_REDIRECT_URI:-${APP_URL}/auth/callback}"
+
+  SURVEY_MINIMUM_SEGMENT_SIZE: "${SURVEY_MINIMUM_SEGMENT_SIZE:-5}"
+  SURVEY_EXPORT_EXPIRY_HOURS: "${SURVEY_EXPORT_EXPIRY_HOURS:-48}"
+
+  SANCTUM_STATEFUL_DOMAINS: "${SANCTUM_STATEFUL_DOMAINS:?isi SANCTUM_STATEFUL_DOMAINS (domain SPA)}"
+  SPA_URL: "${SPA_URL:?isi SPA_URL (URL publik SPA)}"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: "${DB_DATABASE:-myameta_survey}"
+      POSTGRES_USER: "${DB_USERNAME:-myameta}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?isi DB_PASSWORD}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:?isi REDIS_PASSWORD}"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: "${REDIS_PASSWORD:?isi REDIS_PASSWORD}"
+
+  # Jalan SEKALI tiap deploy (selesai lalu exit), sebelum api/queue/scheduler
+  # start -- jadi migrasi otomatis dan tanpa race antar-service.
+  migrate:
+    build: *api-build
+    image: myameta-api:latest
+    restart: "no"
+    command: ["php", "artisan", "migrate", "--force", "--no-interaction"]
+    environment: *app-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  api:
+    build: *api-build
+    image: myameta-api:latest
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment: *app-env
+    volumes:
+      # Export (CSV/XLSX/PDF) ditulis oleh queue, diunduh lewat api -- dan
+      # backup harian oleh scheduler -- jadi storage/app harus dibagi.
+      - api_storage:/var/www/html/storage/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/up"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  queue:
+    build: *api-build
+    image: myameta-api:latest
+    restart: unless-stopped
+    user: "www-data"
+    command: php artisan queue:work --tries=3 --backoff=5 --sleep=1 --max-time=3600
+    environment: *app-env
+    volumes:
+      - api_storage:/var/www/html/storage/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build: *api-build
+    image: myameta-api:latest
+    restart: unless-stopped
+    user: "www-data"
+    command: sh -c "while true; do php artisan schedule:run --verbose --no-interaction; sleep 60; done"
+    environment: *app-env
+    volumes:
+      - api_storage:/var/www/html/storage/app
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web/Dockerfile.prod
+      args:
+        # Dibakar ke bundle JS saat build -- ganti domain API = rebuild web.
+        VITE_API_ORIGIN: "${VITE_API_ORIGIN:?isi VITE_API_ORIGIN (https://domain-api)}"
+        VITE_API_BASE_URL: "${VITE_API_BASE_URL:?isi VITE_API_BASE_URL (https://domain-api/api)}"
+    restart: unless-stopped
+    expose:
+      - "80"
+
+volumes:
+  postgres_data:
+  redis_data:
+  api_storage:
