@@ -118,4 +118,24 @@ class StudentSyncTest extends TestCase
 
         Bus::assertDispatched(SyncStudentsJob::class);
     }
+
+    #[Test]
+    public function it_maps_portal_field_names_from_a_plain_array_response(): void
+    {
+        Http::fake([
+            'portal.test/api/master/students*' => Http::response([
+                ['id' => 'p1', 'nim' => '2023010009', 'full_name' => 'Mahasiswa Portal', 'study_program_name' => 'D3 Keperawatan', 'academic_status' => 'Aktif'],
+            ]),
+        ]);
+
+        $run = app(SyncStudentsFromPortalAction::class)->execute('manual');
+
+        $this->assertSame(SyncRun::STATUS_SUCCESS, $run->status);
+        $this->assertDatabaseHas(Student::class, [
+            'source_id' => 'p1',
+            'name' => 'Mahasiswa Portal',
+            'program_study_name' => 'D3 Keperawatan',
+            'status' => 'Aktif',
+        ]);
+    }
 }

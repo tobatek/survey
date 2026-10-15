@@ -16,11 +16,11 @@ use Throwable;
 // NIM historisnya bisa berubah/direvisi sementara source_id (identifier
 // Portal) stabil (FSD §8.1 catatan, RULE-D01).
 //
-// ASUMSI bentuk payload Portal Master Data API — dokumen 15 hanya
-// menyebutkan field inti secara longgar ("NIM, nama, prodi/unit, status
-// aktif"), belum ada kontrak field-level resmi. Mapping di bawah adalah
-// tebakan masuk akal yang HARUS dikonfirmasi/disesuaikan begitu skema
-// respons Portal sungguhan tersedia (lihat Fase 1 exit criteria).
+// Field Portal (id, full_name, study_program_name, academic_status, ...)
+// dipetakan ke kolom lokal di normalize(). Nama kolom lokal juga tetap
+// diterima apa adanya. Alias selain id/full_name/study_program_name/
+// academic_status masih tebakan sampai skema respons Portal dikonfirmasi —
+// baris yang tidak terpetakan masuk SyncError (dengan payload mentah).
 class SyncStudentsFromPortalAction
 {
     public function __construct(
@@ -49,6 +49,8 @@ class SyncStudentsFromPortalAction
             foreach ($this->client->paginate('students') as $page) {
                 foreach ($page as $row) {
                     $processed++;
+                    $rawRow = $row;
+                    $row = $this->normalize($row);
 
                     try {
                         $this->upsert($row);
@@ -61,7 +63,7 @@ class SyncStudentsFromPortalAction
                             'source_id' => $row['source_id'] ?? null,
                             'error_code' => 'UPSERT_FAILED',
                             'message' => $e->getMessage(),
-                            'rejected_payload' => $row,
+                            'rejected_payload' => $rawRow,
                         ]);
                     }
                 }
@@ -91,6 +93,33 @@ class SyncStudentsFromPortalAction
         // langkah reconciliation terpisah dengan kebijakan eksplisit —
         // sengaja belum diimplementasikan di Fase 1.
         return $run->fresh();
+    }
+
+    /**
+     * Petakan field Portal ke nama kolom lokal; nama lokal yang sudah ada menang.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function normalize(array $row): array
+    {
+        $aliases = [
+            'source_id' => 'id',
+            'name' => 'full_name',
+            'email' => 'institutional_email',
+            'program_study_code' => 'study_program_code',
+            'program_study_name' => 'study_program_name',
+            'status' => 'academic_status',
+            'cohort_year' => 'entry_year',
+        ];
+
+        foreach ($aliases as $local => $portal) {
+            if (! isset($row[$local]) && isset($row[$portal])) {
+                $row[$local] = $row[$portal];
+            }
+        }
+
+        return $row;
     }
 
     private function upsert(array $row): void
