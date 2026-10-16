@@ -44,42 +44,68 @@ class SsoController extends Controller
         $code = $request->query('code');
 
         if (! is_string($code) || $code === '') {
-            $recordAuditEvent->execute(
-                action: 'login_failed',
-                result: 'missing_code',
-                correlationId: $correlationId,
-            );
+            // Dibuka langsung (mis. dari tile Portal) tanpa code/error: mulai alur dari awal.
+            // Flag sesi mencegah loop kalau Portal terus membalik tanpa code.
+            if (! $request->has('error') && ! $request->session()->has('sso_restarted_at')) {
+                $request->session()->put('sso_restarted_at', now()->timestamp);
+                Log::info('SSO callback tanpa code, alur dimulai ulang', ['correlation_id' => $correlationId]);
 
-            return $this->redirectToSpaWithError($correlationId);
+                return redirect()->route('auth.redirect');
+            }
+
+            return $this->failLogin($recordAuditEvent, $correlationId, 'code_missing', 'missing_code');
         }
 
         try {
             $identity = $client->verify($code);
-            $user = $findOrCreateUser->execute($identity);
-
-            Auth::login($user);
-            $request->session()->regenerate();
-
-            $recordAuditEvent->execute(
-                action: 'login_succeeded',
-                result: 'success',
-                actor: $user,
-                correlationId: $correlationId,
-            );
-
-            return redirect()->away(config('services.spa.url'));
         } catch (RuntimeException $e) {
-            Log::warning('SSO callback gagal', ['correlation_id' => $correlationId, 'error' => $e->getMessage()]);
+            $reason = str_contains($e->getMessage(), 'ditolak') ? 'code_expired_or_rejected' : 'token_exchange_failed';
 
-            $recordAuditEvent->execute(
-                action: 'login_failed',
-                result: 'verify_failed',
-                context: ['error' => $e->getMessage()],
-                correlationId: $correlationId,
-            );
-
-            return $this->redirectToSpaWithError($correlationId);
+            return $this->failLogin($recordAuditEvent, $correlationId, $reason, 'verify_failed', $e->getMessage());
         }
+
+        try {
+            $user = $findOrCreateUser->execute($identity);
+        } catch (RuntimeException $e) {
+            return $this->failLogin($recordAuditEvent, $correlationId, 'user_not_found', 'verify_failed', $e->getMessage());
+        }
+
+        $request->session()->forget('sso_restarted_at');
+        Auth::login($user);
+        $request->session()->regenerate();
+
+        $recordAuditEvent->execute(
+            action: 'login_succeeded',
+            result: 'success',
+            actor: $user,
+            correlationId: $correlationId,
+        );
+
+        return redirect()->away(config('services.spa.url'));
+    }
+
+    private function failLogin(
+        RecordAuditEventAction $recordAuditEvent,
+        string $correlationId,
+        string $reason,
+        string $auditResult,
+        ?string $detail = null,
+    ): RedirectResponse {
+        // Tanpa code/token/cookie: hanya alasan, kode referensi, dan pesan galat.
+        Log::warning('SSO callback gagal', array_filter([
+            'reason' => $reason,
+            'correlation_id' => $correlationId,
+            'error' => $detail,
+        ]));
+
+        $recordAuditEvent->execute(
+            action: 'login_failed',
+            result: $auditResult,
+            context: ['reason' => $reason],
+            correlationId: $correlationId,
+        );
+
+        return $this->redirectToSpaWithError($correlationId);
     }
 
     // Dev-only: bypass Portal SSO, login langsung sebagai user existing.
