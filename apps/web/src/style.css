@@ -3,6 +3,19 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --brand-50: 238 244 255;
+    --brand-100: 217 230 255;
+    --brand-200: 184 209 255;
+    --brand-300: 139 179 255;
+    --brand-400: 92 141 255;
+    --brand-500: 52 102 246;
+    --brand-600: 37 75 219;
+    --brand-700: 31 59 176;
+    --brand-800: 32 52 140;
+    --brand-900: 30 47 111;
+  }
+
   html {
     @apply text-slate-900 antialiased;
   }

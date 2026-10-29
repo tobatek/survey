@@ -10,6 +10,7 @@ use Database\Seeders\RoleSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -128,13 +129,52 @@ class SsoLoginTest extends TestCase
     }
 
     #[Test]
-    public function callback_without_a_code_fails_safely(): void
+    public function callback_without_parameters_restarts_the_flow(): void
     {
-        $response = $this->get('/auth/callback');
+        $this->get('/auth/callback')->assertRedirect(route('auth.redirect'));
 
-        $response->assertRedirect();
+        $this->assertGuest();
+    }
+
+    #[Test]
+    public function callback_without_code_fails_when_the_flow_was_already_restarted(): void
+    {
+        $response = $this->withSession(['sso_restarted_at' => now()->timestamp])->get('/auth/callback');
+
         $this->assertStringContainsString('error=sso_failed', $response->headers->get('Location'));
         $this->assertGuest();
+    }
+
+    #[Test]
+    public function callback_with_a_portal_error_shows_the_failure_page(): void
+    {
+        $response = $this->get('/auth/callback?error=access_denied');
+
+        $this->assertStringContainsString('error=sso_failed', $response->headers->get('Location'));
+    }
+
+    #[Test]
+    public function a_rejected_code_logs_the_reason_with_the_correlation_id(): void
+    {
+        Http::fake(['portal.test/api/sso/verify' => Http::response('', 401)]);
+        Log::spy();
+
+        $response = $this->get('/auth/callback?code=bad-code');
+
+        preg_match('/correlation_id=([\w-]+)/', $response->headers->get('Location'), $m);
+
+        Log::shouldHaveReceived('warning')->withArgs(
+            fn ($message, $context) => $message === 'SSO callback gagal'
+                && $context['reason'] === 'code_expired_or_rejected'
+                && $context['correlation_id'] === $m[1]
+                && ! str_contains(json_encode($context), 'bad-code'),
+        )->once();
+    }
+
+    #[Test]
+    public function redirect_route_sends_the_browser_to_the_portal(): void
+    {
+        $this->get('/auth/redirect')->assertRedirectContains('https://portal.test/sso/authorize?');
     }
 
     #[Test]
@@ -162,5 +202,15 @@ class SsoLoginTest extends TestCase
     private function encryptedEnvelope(array $identity): array
     {
         return (new SsoCryptoService('test-app-token'))->encrypt($identity);
+    }
+
+    #[Test]
+    public function json_logout_returns_204_and_ends_the_session(): void
+    {
+        $user = User::factory()->create(['tenant_id' => 'default']);
+
+        $this->actingAs($user)->postJson('/logout')->assertNoContent();
+
+        $this->assertGuest('web');
     }
 }

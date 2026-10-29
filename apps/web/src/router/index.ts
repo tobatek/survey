@@ -63,6 +63,12 @@ const router = createRouter({
       meta: { requiresAdmin: true },
     },
     {
+      path: '/settings/branding',
+      name: 'settings.branding',
+      component: () => import('@/features/settings/BrandingPage.vue'),
+      meta: { requiresAdmin: true },
+    },
+    {
       path: '/my-surveys',
       name: 'my-surveys',
       component: () => import('@/features/respondent/MySurveysPage.vue'),

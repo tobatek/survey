@@ -63,7 +63,7 @@ class PortalSsoClient
 
     public function authorizeUrl(string $redirectUri): string
     {
-        return rtrim(config('sso.portal_base_url'), '/').'/sso/authorize?'.http_build_query([
+        return rtrim(config('sso.portal_frontend_url') ?: config('sso.portal_base_url'), '/').'/sso/authorize?'.http_build_query([
             'client_id' => config('sso.client_id'),
             'redirect_uri' => $redirectUri,
         ]);

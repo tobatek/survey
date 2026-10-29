@@ -7,6 +7,8 @@
 // menggeser layout utama.
 import { ref } from 'vue'
 import { useAuthStore } from '@/features/auth/store/auth'
+import { useBrandingStore } from '@/features/branding/store/branding'
+import { useToast } from '@/features/shared/useToast'
 
 export type NavIcon = 'clipboard' | 'academic-cap' | 'briefcase' | 'chart-bar' | 'cog'
 
@@ -24,6 +26,16 @@ defineProps<{
 
 const sidebarOpen = ref(false)
 const auth = useAuthStore()
+const branding = useBrandingStore()
+const { push } = useToast()
+
+async function onLogout() {
+  try {
+    await auth.logout()
+  } catch (e) {
+    push(e instanceof Error ? e.message : 'Gagal keluar.', 'error')
+  }
+}
 
 // Path SVG outline per ikon menu (gaya konsisten dengan ikon lain di app:
 // stroke-width 2, viewBox 24). Dipakai di rail sidebar desktop (collapsed).
@@ -53,8 +65,9 @@ const NAV_ICON_PATHS: Record<NavIcon, string> = {
       :class="{ 'translate-x-0': sidebarOpen }"
     >
       <div class="flex h-16 items-center gap-2 border-b border-slate-100 px-5">
-        <div class="h-8 w-8 rounded-lg bg-brand-600" />
-        <span class="font-semibold text-slate-900">myAMETA Survey</span>
+        <img v-if="branding.data?.logo_url" :src="branding.data.logo_url" alt="" class="h-8 w-8 rounded-lg object-contain" />
+        <div v-else class="h-8 w-8 rounded-lg bg-brand-600" />
+        <span class="font-semibold text-slate-900">{{ branding.appName }}</span>
       </div>
       <nav class="flex flex-col gap-1 p-3">
         <RouterLink
@@ -78,11 +91,12 @@ const NAV_ICON_PATHS: Record<NavIcon, string> = {
         class="absolute inset-y-0 left-0 z-40 flex w-[72px] flex-col overflow-hidden bg-white ring-1 ring-slate-200 transition-[width] duration-200 ease-in-out group-hover/rail:w-64 group-hover/rail:shadow-xl group-focus-within/rail:w-64"
       >
         <div class="flex h-16 items-center gap-3 border-b border-slate-100 px-[18px]">
-          <div class="h-8 w-8 shrink-0 rounded-lg bg-brand-600" />
+          <img v-if="branding.data?.logo_url" :src="branding.data.logo_url" alt="" class="h-8 w-8 shrink-0 rounded-lg object-contain" />
+          <div v-else class="h-8 w-8 shrink-0 rounded-lg bg-brand-600" />
           <span
             class="whitespace-nowrap font-semibold text-slate-900 opacity-0 transition-opacity duration-150 group-hover/rail:opacity-100 group-focus-within/rail:opacity-100"
           >
-            myAMETA Survey
+            {{ branding.appName }}
           </span>
         </div>
         <nav class="flex flex-col gap-1 p-3">
@@ -122,7 +136,7 @@ const NAV_ICON_PATHS: Record<NavIcon, string> = {
               <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <div class="hidden text-sm text-slate-500 sm:block">{{ institutionName ?? 'STIKES Advaita Medika' }}</div>
+          <div class="hidden text-sm text-slate-500 sm:block">{{ institutionName ?? branding.data?.institution_name ?? '' }}</div>
         </div>
         <div class="flex items-center gap-3">
           <span v-if="auth.user" class="hidden text-xs text-slate-500 sm:inline">{{ auth.user.name }}</span>
@@ -131,7 +145,7 @@ const NAV_ICON_PATHS: Record<NavIcon, string> = {
           <button
             type="button"
             class="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
-            @click="auth.logout()"
+            @click="onLogout()"
           >
             Keluar
           </button>

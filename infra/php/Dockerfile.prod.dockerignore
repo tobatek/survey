@@ -1,0 +1,25 @@
+# Dipakai BuildKit untuk build context = root repo (infra/php/Dockerfile.prod).
+# .dockerignore di apps/api TIDAK terbaca karena context-nya root repo.
+.git
+.github
+docs
+infra/docker-compose*.yml
+apps/web
+apps/api/.env
+apps/api/.env.*
+!apps/api/.env.example
+!apps/api/.env.production.example
+apps/api/vendor
+apps/api/node_modules
+apps/api/tests
+apps/api/.phpunit.result.cache
+apps/api/storage/logs/*
+!apps/api/storage/logs/.gitignore
+apps/api/storage/framework/cache/*
+apps/api/storage/framework/sessions/*
+apps/api/storage/framework/views/*
+apps/api/storage/framework/testing/*
+!apps/api/storage/framework/*/.gitignore
+apps/api/storage/app/*
+!apps/api/storage/app/.gitignore
+apps/api/bootstrap/cache/*.php

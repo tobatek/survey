@@ -34,7 +34,15 @@ class PortalMasterDataClient
                 );
             }
 
-            $body = $response->json();
+            $body = $response->json() ?? [];
+
+            // Portal bisa membalas amplop {data, next_cursor} atau array polos
+            // (daftar baris langsung, tanpa paginasi cursor).
+            if (array_is_list($body)) {
+                yield $body;
+
+                return;
+            }
 
             yield $body['data'] ?? [];
 

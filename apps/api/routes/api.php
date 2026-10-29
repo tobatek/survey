@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\AnalyticsController;
+use App\Http\Controllers\Api\BrandingController;
 use App\Http\Controllers\Api\CampaignController;
 use App\Http\Controllers\Api\EmployeeController;
 use App\Http\Controllers\Api\ExportController;
@@ -20,6 +21,9 @@ use App\Http\Controllers\Auth\SsoController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health/ready', [HealthController::class, 'ready']);
+
+// Branding publik (dipakai halaman login sebelum autentikasi).
+Route::get('/branding', [BrandingController::class, 'show']);
 
 // FSD §11 jalur anonymous -- link token undangan, tidak pernah login.
 // `throttle:start-by-token` (Fase 6 paket A) -- endpoint ini menghash token
@@ -70,6 +74,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Sync master data: hanya LPM Admin dan Technical Admin (BR-DM-005,
     // FSD §5.3 "Sync master: opsional / ya").
     Route::middleware('role:lpm_admin,technical_admin')->group(function () {
+        Route::post('/branding', [BrandingController::class, 'update']);
         Route::post('/students/sync', [StudentController::class, 'sync']);
         Route::post('/employees/sync', [EmployeeController::class, 'sync']);
     });

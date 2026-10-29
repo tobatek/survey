@@ -15,6 +15,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // API di belakang Traefik (Dokploy) dan mungkin Cloudflare: container
+        // tidak dipublikasikan langsung (cuma `expose`), jadi aman percaya
+        // semua proxy supaya IP asli & skema https terbaca dari X-Forwarded-*.
+        $middleware->trustProxies(at: '*');
         $middleware->statefulApi();
         $middleware->alias(['role' => EnsureUserHasRole::class]);
         // Fase 6 paket B -- header keamanan di SEMUA response (web+api+/up).

@@ -17,6 +17,7 @@ COPY apps/api/composer.json apps/api/composer.lock ./
 
 RUN composer install \
         --no-dev \
+        --ignore-platform-req=ext-gd \
         --no-interaction \
         --no-ansi \
         --no-scripts \
@@ -25,7 +26,7 @@ RUN composer install \
 
 COPY apps/api/. .
 
-RUN composer dump-autoload --optimize --no-dev --no-interaction
+RUN composer dump-autoload --optimize --no-dev --no-interaction --ignore-platform-req=ext-gd
 
 # --- Stage 2: runtime Nginx + PHP-FPM ---
 FROM php:8.3-fpm-alpine AS runtime
@@ -38,7 +39,13 @@ RUN apk add --no-cache \
         libzip-dev \
         libsodium-dev \
         oniguruma-dev \
+        libpng-dev \
+        libjpeg-turbo-dev \
+        freetype-dev \
+        postgresql-client \
+    && docker-php-ext-configure gd --with-freetype --with-jpeg \
     && docker-php-ext-install \
+        gd \
         pdo_pgsql \
         pgsql \
         intl \
@@ -48,6 +55,7 @@ RUN apk add --no-cache \
         opcache
 
 COPY infra/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
+COPY infra/php/fpm-logging.conf /usr/local/etc/php-fpm.d/zz-logging.conf
 COPY infra/nginx/api.prod.conf /etc/nginx/http.d/default.conf
 COPY infra/php/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 

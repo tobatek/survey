@@ -17,8 +17,14 @@ export class ApiError extends Error {
   }
 }
 
+// Origin API dipakai untuk /sanctum/csrf-cookie (di luar prefix /api). Di
+// produksi SPA & API beda host (VITE_API_BASE_URL absolut), jadi path relatif
+// akan nyasar ke Nginx SPA. Di dev, API_BASE relatif ('/api') -> origin kosong
+// supaya tetap lewat proxy Vite.
+const API_ORIGIN = /^https?:\/\//.test(API_BASE) ? new URL(API_BASE).origin : ''
+
 async function ensureCsrfCookie(): Promise<void> {
-  await fetch('/sanctum/csrf-cookie', { credentials: 'include' })
+  await fetch(`${API_ORIGIN}/sanctum/csrf-cookie`, { credentials: 'include' })
 }
 
 function readCookie(name: string): string | null {
@@ -34,13 +40,16 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   }
 
   const xsrfToken = readCookie('XSRF-TOKEN')
+  // FormData (upload file) harus dikirim tanpa Content-Type manual supaya
+  // browser mengisi boundary multipart sendiri.
+  const isFormData = options.body instanceof FormData
 
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     credentials: 'include',
     headers: {
       Accept: 'application/json',
-      'Content-Type': 'application/json',
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
       ...(xsrfToken ? { 'X-XSRF-TOKEN': xsrfToken } : {}),
       ...options.headers,
     },
