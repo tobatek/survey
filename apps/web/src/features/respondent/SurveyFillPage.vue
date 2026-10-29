@@ -196,10 +196,10 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="min-h-screen bg-slate-50">
-    <header class="border-b border-slate-200 bg-white px-4 py-4 sm:px-6">
+    <header class="bg-[#1c1f3d] px-4 py-4 text-white sm:px-6">
       <div class="mx-auto flex max-w-2xl items-center gap-2">
-        <div class="h-8 w-8 rounded-lg bg-brand-600" />
-        <span class="font-semibold text-slate-900">myAMETA Survey</span>
+        <div class="h-8 w-8 rounded-lg bg-white/15" />
+        <span class="font-semibold uppercase tracking-wide">myAMETA Survey</span>
       </div>
     </header>
 
@@ -295,7 +295,7 @@ onBeforeUnmount(() => {
           </button>
           <button
             type="button"
-            class="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            class="rounded-full bg-gradient-to-r from-brand-500 to-fuchsia-500 px-5 py-2 text-sm font-bold uppercase tracking-wide text-white shadow-sm transition hover:brightness-110 disabled:opacity-50"
             :disabled="store.submitting"
             @click="handleSubmit"
           >
