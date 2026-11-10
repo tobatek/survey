@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import ToastNotification from '@/features/shared/components/ToastNotification.vue'
+import GuidedTourPanel from '@/features/shared/components/GuidedTourPanel.vue'
 import { useToast } from '@/features/shared/useToast'
 import { useBrandingStore } from '@/features/branding/store/branding'
 import { onMounted } from 'vue'
@@ -14,6 +15,8 @@ onMounted(() => {
 
 <template>
   <RouterView />
+
+  <GuidedTourPanel />
 
   <div class="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4">
     <div v-for="t in toasts" :key="t.id" class="pointer-events-auto w-full max-w-sm">

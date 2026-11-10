@@ -126,7 +126,7 @@ const EXPAND_ICON_PATH = 'M13 5l7 7-7 7M6 5l7 7-7 7'
           {{ branding.appName }}
         </span>
       </div>
-      <nav class="relative flex flex-1 flex-col gap-1 p-3">
+      <nav data-tour="sidebar-nav" class="relative flex flex-1 flex-col gap-1 p-3">
         <RouterLink
           v-for="item in navItems"
           :key="item.to"

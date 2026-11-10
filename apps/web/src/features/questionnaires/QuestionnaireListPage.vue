@@ -2,7 +2,7 @@
 // FSD §17.3 / plan Fase 2 — daftar Kuesioner nyata (ganti placeholder Fase 0):
 // tab status, search+kategori via FilterPanel, card ala karirlink.id.
 // Builder (section/pertanyaan/finalize) ada di QuestionnaireBuilderPage.vue.
-import { onMounted, reactive, ref, watch } from 'vue'
+import { nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppShell from '@/features/shared/components/AppShell.vue'
 import Card from '@/features/shared/components/Card.vue'
@@ -12,6 +12,9 @@ import EmptyState from '@/features/shared/components/EmptyState.vue'
 import { apiFetch, ApiError } from '@/lib/api'
 import { useToast } from '@/features/shared/useToast'
 import { NAV_ITEMS } from '@/router/nav'
+import WalkthroughTour from '@/features/shared/components/WalkthroughTour.vue'
+import { useWalkthrough, type WalkthroughStep } from '@/features/shared/useWalkthrough'
+import { useGuidedTourStore } from '@/features/shared/guidedTour'
 
 interface QuestionnaireRow {
   id: string
@@ -48,6 +51,48 @@ const STATUS_TABS: { value: SurveyStatus | ''; label: string }[] = [
 
 const router = useRouter()
 const toast = useToast()
+const tour = useWalkthrough()
+const guidedTour = useGuidedTourStore()
+
+const TOUR_STEPS: WalkthroughStep[] = [
+  {
+    target: '[data-tour="sidebar-nav"]',
+    title: 'Menu utama',
+    description:
+      'Semua fitur ada di sini: Kuesioner (lagi kamu buka), Data Mahasiswa, Data Pegawai, Hasil Analisa, sampai Unduh Template. Tinggal klik untuk pindah halaman.',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="create-questionnaire"]',
+    title: 'Mulai dari sini',
+    description:
+      'Klik tombol ini untuk membuat kuesioner baru — bisa mulai dari kosong, atau pakai template yang sudah ada supaya lebih cepat.',
+    placement: 'left',
+  },
+  {
+    target: '[data-tour="status-tabs"]',
+    title: 'Pantau statusnya',
+    description:
+      'Kuesioner punya beberapa tahap: Draft (masih disusun), Siap (sudah final, menunggu disebarkan), Aktif (sedang diisi responden), Dijeda, dan Ditutup. Klik tab untuk menyaring sesuai tahapnya.',
+    placement: 'bottom',
+  },
+  {
+    target: '[data-tour="filter-panel"]',
+    title: 'Cari lebih cepat',
+    description: 'Kalau daftarnya sudah panjang, cari pakai kode/judul atau kategori di sini, lalu klik "Terapkan Filter".',
+    placement: 'right',
+  },
+  {
+    target: '[data-tour="questionnaire-grid"]',
+    title: 'Daftar kuesioner',
+    description: 'Ini daftar kuesionernya. Klik salah satu kartu untuk membuka dan mengedit section, pertanyaan, sampai menerbitkannya.',
+    placement: 'top',
+  },
+]
+
+function startTour() {
+  tour.start('kuesioner', TOUR_STEPS)
+}
 
 const rows = ref<QuestionnaireRow[]>([])
 const total = ref(0)
@@ -151,7 +196,11 @@ async function submitCreate() {
 }
 
 watch(page, loadQuestionnaires)
-onMounted(loadQuestionnaires)
+onMounted(async () => {
+  await loadQuestionnaires()
+  await nextTick()
+  tour.startIfNew('kuesioner', TOUR_STEPS)
+})
 </script>
 
 <template>
@@ -159,6 +208,29 @@ onMounted(loadQuestionnaires)
     <template #topbar-actions>
       <button
         type="button"
+        class="flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-700"
+        aria-label="Tampilkan panduan penggunaan halaman ini"
+        title="Panduan penggunaan"
+        @click="startTour"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9.1 9a3 3 0 115.2 2c-.9.9-1.8 1.3-1.8 2.5" />
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 17h.01" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="hidden items-center gap-1.5 rounded-full border border-brand-200 bg-brand-50 px-3.5 py-2 text-xs font-semibold text-brand-700 transition hover:bg-brand-100 sm:flex"
+        @click="guidedTour.start()"
+      >
+        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
+        </svg>
+        Tur Lengkap
+      </button>
+      <button
+        type="button"
+        data-tour="create-questionnaire"
         class="rounded-full bg-gradient-to-r from-brand-500 to-fuchsia-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:brightness-110"
         @click="openCreateForm"
       >
@@ -169,7 +241,7 @@ onMounted(loadQuestionnaires)
     <h1 class="text-lg font-semibold text-slate-900">Kuesioner</h1>
     <p class="mt-1 text-sm text-slate-500">Kelola kuesioner dari draft hingga hasil analisa.</p>
 
-    <div class="mt-4 flex gap-1 overflow-x-auto border-b border-slate-200">
+    <div data-tour="status-tabs" class="mt-4 flex gap-1 overflow-x-auto border-b border-slate-200">
       <button
         v-for="tab in STATUS_TABS"
         :key="tab.value"
@@ -187,7 +259,7 @@ onMounted(loadQuestionnaires)
     </div>
 
     <div class="mt-6 grid gap-6 lg:grid-cols-[280px_1fr]">
-      <FilterPanel @apply="applyFilters" @reset="resetFilters">
+      <FilterPanel data-tour="filter-panel" @apply="applyFilters" @reset="resetFilters">
         <div>
           <label class="text-xs font-medium text-slate-500">Cari Kode/Judul</label>
           <input
@@ -221,7 +293,7 @@ onMounted(loadQuestionnaires)
           description="Buat kuesioner baru atau ubah filter pencarian."
         />
 
-        <div v-else class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div v-else data-tour="questionnaire-grid" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <Card v-for="row in rows" :key="row.id" clickable @click="router.push({ name: 'questionnaires.builder', params: { id: row.id } })">
             <template #header>
               <p class="text-xs text-slate-400">{{ row.code }}</p>
@@ -336,5 +408,7 @@ onMounted(loadQuestionnaires)
         </form>
       </div>
     </div>
+
+    <WalkthroughTour />
   </AppShell>
 </template>
