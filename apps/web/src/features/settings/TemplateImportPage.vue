@@ -144,7 +144,7 @@ onMounted(() => {
         <div class="grid grid-cols-3 gap-3 text-center">
           <div class="rounded-lg bg-slate-50 p-3">
             <p class="text-lg font-semibold text-slate-900">{{ store.current.preview.sections }}</p>
-            <p class="text-xs text-slate-500">Section</p>
+            <p class="text-xs text-slate-500">Bagian</p>
           </div>
           <div class="rounded-lg bg-slate-50 p-3">
             <p class="text-lg font-semibold text-slate-900">{{ store.current.preview.questions }}</p>
@@ -268,7 +268,7 @@ onMounted(() => {
                   :href="`${API_BASE}/templates/${template.id}/export`"
                   class="mr-2 text-xs font-medium text-brand-600 hover:underline"
                 >
-                  Export
+                  Ekspor
                 </a>
                 <button
                   type="button"
