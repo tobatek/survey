@@ -40,6 +40,8 @@ class SyncEmployeesFromPortalAction
             foreach ($this->client->paginate('employees') as $page) {
                 foreach ($page as $row) {
                     $processed++;
+                    $rawRow = $row;
+                    $row = $this->normalize($row);
 
                     try {
                         $this->upsert($row);
@@ -52,7 +54,7 @@ class SyncEmployeesFromPortalAction
                             'source_id' => $row['source_id'] ?? null,
                             'error_code' => 'UPSERT_FAILED',
                             'message' => $e->getMessage(),
-                            'rejected_payload' => $row,
+                            'rejected_payload' => $rawRow,
                         ]);
                     }
                 }
@@ -78,6 +80,30 @@ class SyncEmployeesFromPortalAction
         }
 
         return $run->fresh();
+    }
+
+    /**
+     * Petakan field Portal ke nama kolom lokal; nama lokal yang sudah ada menang.
+     *
+     * @param  array<string, mixed>  $row
+     * @return array<string, mixed>
+     */
+    private function normalize(array $row): array
+    {
+        $aliases = [
+            'source_id' => 'id',
+            'employee_number' => 'nip',
+            'name' => 'full_name',
+            'position_name' => 'position',
+        ];
+
+        foreach ($aliases as $local => $portal) {
+            if (! isset($row[$local]) && isset($row[$portal])) {
+                $row[$local] = $row[$portal];
+            }
+        }
+
+        return $row;
     }
 
     private function upsert(array $row): void
